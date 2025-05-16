@@ -1,1 +1,1 @@
-gfdg
+print(1+2)
