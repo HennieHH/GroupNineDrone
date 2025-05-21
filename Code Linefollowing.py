@@ -1,3 +1,7 @@
 #Here is the code for the linefollowing Using OpenCV
+import numpy as np
+import matplotlib.pyplot as plt
 
-print(4*3)
+b = 2*np.pi
+
+print(b*3)
