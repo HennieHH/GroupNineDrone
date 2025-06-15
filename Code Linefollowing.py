@@ -6,6 +6,8 @@ with automatic waypoint generation and line-following drift correction.
 from controller import Robot, DistanceSensor, Motor
 import numpy as np
 import heapq
+
+
 # -------------------------(Dijkstra's Algorithm)------------------------------
 # Pathfinding Implementation
 
@@ -28,8 +30,10 @@ def create_grid():
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0]
     ])
 
+
 def create_costs():
     return np.ones((15, 17), dtype=int)
+
 
 def dijkstra(grid, costs, start, goal):
     rows, cols = grid.shape
@@ -48,7 +52,7 @@ def dijkstra(grid, costs, start, goal):
             break
 
         r, c = current
-        for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nr, nc = r + dr, c + dc
             if 0 <= nr < rows and 0 <= nc < cols:
                 if grid[nr, nc] == 0:
@@ -69,6 +73,7 @@ def dijkstra(grid, costs, start, goal):
     path.append(start)
     path.reverse()
     return path
+
 
 # -------------------------(grid to world)------------------------------
 
@@ -107,12 +112,13 @@ def grid_to_world(row, col):
     y = y_origin + row * dy_per_row
     return (x, y)
 
+
 # -------------------------(world to grid)------------------------------
 
 def world_to_grid(x, y):
     """Convert world coordinates back to grid coordinates,
     with special handling for rows 2 and 12."""
-    #Manual mappings from grid_to_world:
+    # Manual mappings from grid_to_world:
     manual_row2 = {
         0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
         5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.042291, 9: 0.000142,
@@ -128,7 +134,7 @@ def world_to_grid(x, y):
 
     # Expected y-values for rows 2 and 12
     y_row2 = -0.267049
-    y_row12 =  0.227986
+    y_row12 = 0.227986
     # Tolerances (half cell size)
     dy = 0.0496035 / 2.0
     dx = abs(-0.0622105625) / 2.0
@@ -142,7 +148,7 @@ def world_to_grid(x, y):
         else:
             return None
 
-   #Try row 2
+    # Try row 2
     if abs(y - y_row2) <= dy:
         col = find_manual_col(manual_row2)
         if col is not None:
@@ -170,10 +176,10 @@ def world_to_grid(x, y):
 
     return (row, col)
 
+
 # -------------------------(waypoints)------------------------------
 
-def generate_path_waypoints(start_pos, goal_pos, custom_grid=None, return_to_start=False):
-    """Generate waypoints with optional return-to-start functionality"""
+def generate_path_waypoints(start_pos, goal_pos, custom_grid=None):
     grid = custom_grid if custom_grid is not None else create_grid()
     costs = create_costs()
 
@@ -186,27 +192,21 @@ def generate_path_waypoints(start_pos, goal_pos, custom_grid=None, return_to_sta
     # Find path using Dijkstra
     path = dijkstra(grid, costs, start_grid, goal_grid)
 
-    # If return_to_start is enabled, add return path
-    if return_to_start and len(path) > 1:
-        # Find path back from goal to start
-        return_path = dijkstra(grid, costs, goal_grid, start_grid)
-        # Remove the first waypoint of return path to avoid duplication
-        if len(return_path) > 1:
-            path.extend(return_path[1:])
-            print(f"Added return path with {len(return_path)-1} additional waypoints")
-
     # Convert grid path to world coordinates
     waypoints = []
     for step in path:
         world_coord = grid_to_world(*step)
         waypoints.append(world_coord)
+
         print(step, grid_to_world(*step))
 
     print(f"Generated {len(waypoints)} waypoints:")
     for i, wp in enumerate(waypoints):
-        print(f"  {i+1}: ({wp[0]:.3f}, {wp[1]:.3f})")
-
+        print(f"  {i + 1}: ({wp[0]:.3f}, {wp[1]:.3f})")
+    force_line_following = False  # Disable override temporarily
+    line_follow_start_time = robot.getTime()
     return waypoints
+
 
 # ------------------------initializaion-------------------------------
 # Robot Controller
@@ -243,8 +243,8 @@ rightMotor.setVelocity(0.0)
 
 # Robot parameters
 R = 0.0205  # Wheel radius [m]
-D = 0.057   # Distance between wheels [m]
-delta_t = timestep / 1000.0 #0.016
+D = 0.057  # Distance between wheels [m]
+delta_t = timestep / 1000.0  # 0.016
 
 # Position tracking variables (odometry only)
 x, y = 0.531976, -0.364056  # Initial position
@@ -255,30 +255,12 @@ encoderValues = [0, 0]
 
 # Pathfinding setup
 start_position = (0.531976, -0.364056)  # Robot's starting position
-goal_position = (-0.46339299999999994, 0.330393)   # Target position (example)
+goal_position = (-0.46339299999999994, 0.330393)  # Target position (example)
 
-# Generate waypoints using pathfinding with return-to-start enabled
-waypoints = generate_path_waypoints(start_position, goal_position, return_to_start=True)
+# Generate waypoints using pathfinding
+waypoints = generate_path_waypoints(start_position, goal_position)
 current_waypoint_index = 0
 waypoint_reached_threshold = 0.05  # Increased threshold for better reliability
-
-# Mission state tracking
-mission_states = ['going_to_goal', 'returning_to_start', 'completed']
-current_mission_state = mission_states[0]
-goal_waypoint_index = None  # Will be set when we calculate the path
-
-# Find the index where we reach the goal (before starting the return journey)
-def find_goal_waypoint_index():
-    """Find the waypoint index that corresponds to reaching the goal"""
-    goal_grid = world_to_grid(*goal_position)
-    for i, waypoint in enumerate(waypoints):
-        waypoint_grid = world_to_grid(*waypoint)
-        if waypoint_grid == goal_grid:
-            return i
-    return len(waypoints) // 2  # Fallback: assume halfway point
-
-goal_waypoint_index = find_goal_waypoint_index()
-print(f"Goal will be reached at waypoint index: {goal_waypoint_index}")
 
 # Control variables
 e_acc = 0
@@ -297,8 +279,11 @@ force_line_following = False
 line_follow_start_time = 0.0
 line_follow_block_duration = 2.0  # seconds to disable force-follow
 last_snap_time = 0.0
-snap_cooldown = 0.3  # seconds
+snap_cooldown = 0.4  # seconds
 
+test = False
+box = False
+turn_direction = None  # Initialized somewhere appropriate
 # -------------------------functions------------------------------
 # -------------position-----------
 
@@ -307,10 +292,12 @@ def get_wheels_speed(encoderValues, oldEncoderValues, delta_t):
     wr = (encoderValues[1] - oldEncoderValues[1]) / delta_t
     return wl, wr
 
+
 def get_robot_speeds(wl, wr, R, D):
     u = R / 2.0 * (wr + wl)
     w = R / D * (wr - wl)
     return u, w
+
 
 def get_robot_pose(u, w, x, y, phi, delta_t):
     delta_phi = w * delta_t
@@ -318,9 +305,9 @@ def get_robot_pose(u, w, x, y, phi, delta_t):
 
     # Wrap angle to [-π, π]
     if phi >= np.pi:
-        phi = phi - 2*np.pi
+        phi = phi - 2 * np.pi
     elif phi < -np.pi:
-        phi = phi + 2*np.pi
+        phi = phi + 2 * np.pi
 
     delta_x = u * np.cos(phi) * delta_t
     delta_y = u * np.sin(phi) * delta_t
@@ -329,15 +316,17 @@ def get_robot_pose(u, w, x, y, phi, delta_t):
 
     return x, y, phi
 
-#-------------PID-----------
+
+# -------------PID-----------
 
 def get_pose_error(xd, yd, x, y, phi):
     x_err = xd - x
     y_err = yd - y
-    dist_err = np.sqrt(x_err**2 + y_err**2)
+    dist_err = np.sqrt(x_err ** 2 + y_err ** 2)
     phi_d = np.arctan2(y_err, x_err)
     phi_err = np.arctan2(np.sin(phi_d - phi), np.cos(phi_d - phi))
     return dist_err, phi_err
+
 
 def pid_controller(e, e_prev, e_acc, delta_t, kp=2.0, kd=0.1, ki=0.00):
     P = kp * e
@@ -348,9 +337,10 @@ def pid_controller(e, e_prev, e_acc, delta_t, kp=2.0, kd=0.1, ki=0.00):
     e_acc = I
     return output, e_prev, e_acc
 
+
 def wheel_speed_commands(u_d, w_d, d, r):
-    wr_d = float((2*u_d + d*w_d) / (2*r))
-    wl_d = float((2*u_d - d*w_d) / (2*r))
+    wr_d = float((2 * u_d + d * w_d) / (2 * r))
+    wl_d = float((2 * u_d - d * w_d) / (2 * r))
 
     if np.abs(wl_d) > MAX_SPEED or np.abs(wr_d) > MAX_SPEED:
         speed_ratio = np.abs(wr_d) / np.abs(wl_d) if np.abs(wl_d) != 0 else 1
@@ -363,32 +353,25 @@ def wheel_speed_commands(u_d, w_d, d, r):
 
     return wl_d, wr_d
 
-#-------------adding waypoint -----------
+
+# -------------adding waypoint -----------
 
 def update_current_waypoint():
-    global current_waypoint_index, e_acc, e_prev, current_mission_state
+    global current_waypoint_index, e_acc, e_prev
 
     if current_waypoint_index < len(waypoints) - 1:
         current_waypoint_index += 1
         e_acc = 0
         e_prev = 0
         xd, yd = waypoints[current_waypoint_index]
-
-        # Update mission state based on progress
-        if current_waypoint_index == goal_waypoint_index:
-            current_mission_state = 'going_to_goal'
-            print("GOAL REACHED! Starting return journey...")
-        elif current_waypoint_index > goal_waypoint_index:
-            current_mission_state = 'returning_to_start'
-
-        print(f"Moving to waypoint {current_waypoint_index + 1}/{len(waypoints)}: ({xd:.3f}, {yd:.3f}) [{current_mission_state}]")
+        print(f"Moving to waypoint {current_waypoint_index + 1}/{len(waypoints)}: ({xd:.3f}, {yd:.3f})")
         return True
     else:
-        current_mission_state = 'completed'
-        print("MISSION COMPLETE! Robot has returned to starting position!")
-        return False
+         print("All waypoints reached! Mission complete!")
+         return False
 
-#-------------Line_follower-----------
+
+# -------------Line_follower-----------
 
 def line_following_control(gsValues, force_follow=False):
     """
@@ -441,6 +424,7 @@ def line_following_control(gsValues, force_follow=False):
     line_counter += 1
     return leftSpeed, rightSpeed
 
+
 # --------------------position correction-----------------------
 
 def correct_position_on_line(x, y, robot_time, last_snap_time):
@@ -462,28 +446,27 @@ def correct_position_on_line(x, y, robot_time, last_snap_time):
     dx = abs(x - corrected_x) if snap_x else float('inf')
     dy = abs(y - corrected_y) if snap_y else float('inf')
 
-    if dx < dy:
-        print(f"Snapping x from {x:.3f} → {corrected_x:.3f} (col {col})")
-        return corrected_x, y, robot_time
-    elif dy < dx:
+    if dy < dx:
         print(f"Snapping y from {y:.3f} → {corrected_y:.3f} (row {row})")
         return x, corrected_y, robot_time
+    elif dx < dy:
+        print(f"Snapping x from {x:.3f} → {corrected_x:.3f} (col {col})")
+        return corrected_x, y, robot_time
     else:
         return x, y, last_snap_time  # no clear snap direction
 
-# --------------------main loop-----------------------------------
 
-print("Starting pathfinding robot controller with return-to-start functionality...")
+# --------------------main loop-----------------------------------
+#
+
+print("Starting pathfinding robot controller with line following...")
 print(f"Path has {len(waypoints)} waypoints")
-print(f"Goal position: {goal_position}")
-print(f"Start position: {start_position}")
 
 while robot.step(timestep) != -1:
-    #-------------position-----------
-    if not force_line_following and (robot.getTime() - line_follow_start_time > line_follow_block_duration):
-        force_line_following = True
-        print("Line-follow override re-enabled.")
-
+    # -------------position-----------
+    if not force_line_following and (robot.getTime() - line_follow_start_time > line_follow_block_duration):  #
+        force_line_following = True  #
+        print("Line-follow override re-enabled.")  #
     oldEncoderValues = encoderValues
     encoderValues = [encoder[i].getValue() for i in range(2)]
     wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, delta_t)
@@ -492,12 +475,16 @@ while robot.step(timestep) != -1:
 
     # -------------Read sensors------------
     gsValues = [gs[i].getValue() for i in range(3)]
+
     psValues = [ps[i].getValue() for i in range(8)]
 
-    #-------------obstacle detect-----------
-    obstacle_detected = psValues[0] > 85.0 or psValues[7] > 85.0
+    # -------------obstacle detect-----------
 
-    #-------------replann-----------
+    obstacle_detected = psValues[0] > 85.0 or psValues[7] > 85.0
+    # print(f"obstacle: {obstacle_detected} {psValues[0]} {psValues[7]}")
+
+    # -------------replann-----------
+
     if obstacle_detected and (robot.getTime() - last_replan_time) > replan_cooldown:
         last_replan_time = robot.getTime()
         print("Obstacle detected! Replanning...")
@@ -508,26 +495,14 @@ while robot.step(timestep) != -1:
         dynamic_grid = create_grid().copy()
         dynamic_grid[blocked_cell[0], blocked_cell[1]] = 1  # Set as obstacle
 
-        # Determine target based on current mission state
-        if current_mission_state == 'going_to_goal':
-            target_pos = goal_position
-            print("Replanning path to goal...")
-        else:  # returning_to_start
-            target_pos = start_position
-            print("Replanning return path to start...")
-
         # Replan path from current robot position
-        waypoints = generate_path_waypoints((x, y), target_pos, custom_grid=dynamic_grid,
-                                          return_to_start=(current_mission_state == 'going_to_goal'))
+        waypoints = generate_path_waypoints((x, y), goal_position, custom_grid=dynamic_grid)
         current_waypoint_index = 0
         e_acc = 0
         e_prev = 0
-        force_line_following = False
+        force_line_following = False  # Disable override temporarily
         line_follow_start_time = robot.getTime()
-
-        # Recalculate goal waypoint index if we're still going to goal
-        if current_mission_state == 'going_to_goal':
-            goal_waypoint_index = find_goal_waypoint_index()
+        # x, y = relocalize(waypoints, current_waypoint_index, gsValues)
 
         if len(waypoints) == 0:
             print("No alternative path found!")
@@ -538,7 +513,7 @@ while robot.step(timestep) != -1:
             print(f"New path with {len(waypoints)} waypoints created.")
             continue
 
-    #------- Check if we have waypoints to follow-----------
+    # ------- Check if we have waypoints to follow-----------
     if len(waypoints) == 0:
         print("No valid path found!")
         leftMotor.setVelocity(0)
@@ -550,47 +525,56 @@ while robot.step(timestep) != -1:
         xd, yd = waypoints[current_waypoint_index]
     else:
         # -------All waypoints reached---------
-        print(" Mission completed successfully!")
         leftMotor.setVelocity(0)
         rightMotor.setVelocity(0)
         continue
-
     # ----------correction----------
-    centered_on_line = (
-        gsValues[0] > 600 and
-        gsValues[1] < 400 and
-        gsValues[2] > 600
-     )
-    if centered_on_line:
+    snap_on_line = (
+            (gsValues[0] > 500 and gsValues[1] < 400
+            and gsValues[2] > 500) or (gsValues[0] < 400
+            and gsValues[1] < 400) or (gsValues[1] < 400 and gsValues[2] < 400)
+    )
+    if snap_on_line:
         x, y, last_snap_time = correct_position_on_line(x, y, robot.getTime(), last_snap_time)
 
     # ----------errors----------
     position_err, orientation_err = get_pose_error(xd, yd, x, y, phi)
 
     # ------------Waypoint_PID and line_following-------------
-    if position_err < waypoint_reached_threshold:
-        waypoint_msg = f"Waypoint {current_waypoint_index + 1} reached!"
-        if current_waypoint_index == goal_waypoint_index:
-            waypoint_msg += " GOAL ACHIEVED!"
-        print(waypoint_msg)
 
+    if box == True and test == False:
+        print("Box picked up")
+        waypoints = generate_path_waypoints(goal_position, start_position)
+        current_waypoint_index = 0
+        e_acc = 0
+        e_prev = 0
+        force_line_following = False  # Disable override temporarily
+        line_follow_start_time = robot.getTime()
+        test = True
+        box = False
+
+    elif position_err < waypoint_reached_threshold:
+        print(f"Waypoint {current_waypoint_index + 1} reached!")
         if not update_current_waypoint():
             # Mission complete
             leftSpeed = 0
             rightSpeed = 0
+            box = True
         else:
             continue
+
     else:
         # Determine if robot is centered on the line: white–black–white
         centered_on_line = (
-            gsValues[0] > 600 and
-            gsValues[1] < 400 and
-            gsValues[2] > 600
+                gsValues[0] > 600 and
+                gsValues[1] < 400 and
+                gsValues[2] > 600
         )
 
         if centered_on_line and force_line_following:
             # Force line-following if robot is centered on the line
             leftSpeed, rightSpeed = line_following_control(gsValues, force_follow=True)
+            turn_direction = None
 
         elif abs(orientation_err) > 0.7:
             # Use PID for large errors or if no line is visible
@@ -599,16 +583,22 @@ while robot.step(timestep) != -1:
             wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
             leftSpeed = wl_d
             rightSpeed = wr_d
+            turn_direction = None
 
         elif gsValues[0] > 600 and gsValues[1] > 600 and gsValues[2] > 600:
             # Fallback: All sensors see white - turn in direction of orientation error
-            if orientation_err > 0:
-                # Need to turn left (counterclockwise)
+
+            if turn_direction is None:
+                if orientation_err > 0: # Need to turn left (counterclockwise)
+                   turn_direction = 'left'
+                else:# Need to turn right (clockwise)
+                    turn_direction = 'right'
+
+            if turn_direction == 'left':
                 print("All sensors detect white - turning left to search for line")
                 leftSpeed = 0
                 rightSpeed = 1
             else:
-                # Need to turn right (clockwise)
                 print("All sensors detect white - turning right to search for line")
                 leftSpeed = 1
                 rightSpeed = 0
@@ -616,6 +606,7 @@ while robot.step(timestep) != -1:
         else:
             # Default: use line following
             leftSpeed, rightSpeed = line_following_control(gsValues)
+            turn_direction = None
 
     # Clamp speeds
     leftSpeed = max(-MAX_SPEED, min(MAX_SPEED, leftSpeed))
@@ -629,10 +620,10 @@ while robot.step(timestep) != -1:
     print_timer += delta_t
     if print_timer >= print_interval:
         print(f"Position: ({x:.3f}, {y:.3f}), Heading: {phi:.2f}")
-        print(f"Mission State: {current_mission_state}")
         print(f"Waypoint {current_waypoint_index + 1}/{len(waypoints)}: ({xd:.3f}, {yd:.3f})")
         print(f"Distance to waypoint: {position_err:.3f}")
         print(f"Line following state: {line_following_state}")
         print(f"Ground sensors: {gsValues}")
         print("---")
+        print(F" hoekfout= {orientation_err}")
         print_timer = 0.0
