@@ -15,12 +15,12 @@ def create_grid():
     return np.array([
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
@@ -180,7 +180,8 @@ def world_to_grid(x, y):
 # -------------------------(waypoints)------------------------------
 
 def generate_path_waypoints(start_pos, goal_pos, custom_grid=None):
-    grid = custom_grid if custom_grid is not None else create_grid()
+    global main_grid
+    grid = custom_grid if custom_grid is not None else main_grid
     costs = create_costs()
 
     # Convert world coordinates to grid coordinates
@@ -216,8 +217,8 @@ MAX_SPEED = 6.28
 robot = Robot()
 timestep = int(robot.getBasicTimeStep())
 
-# Use odometry only (no GPS)
-print("Using odometry for position tracking")
+# Initialize the main grid
+main_grid = create_grid()
 
 # Initialize devices
 ps = [robot.getDevice(f'ps{i}') for i in range(8)]
@@ -492,11 +493,10 @@ while robot.step(timestep) != -1:
         # Block current waypoint on the grid
         blocked_cell = world_to_grid(*waypoints[current_waypoint_index])
         print(f"Marking grid cell {blocked_cell} as obstacle.")
-        dynamic_grid = create_grid().copy()
-        dynamic_grid[blocked_cell[0], blocked_cell[1]] = 1  # Set as obstacle
-
+        main_grid[blocked_cell[0], blocked_cell[1]] = 1  # Set as obstacle
+        #
         # Replan path from current robot position
-        waypoints = generate_path_waypoints((x, y), goal_position, custom_grid=dynamic_grid)
+        waypoints = generate_path_waypoints((x, y), goal_position)
         current_waypoint_index = 0
         e_acc = 0
         e_prev = 0
@@ -576,7 +576,7 @@ while robot.step(timestep) != -1:
             leftSpeed, rightSpeed = line_following_control(gsValues, force_follow=True)
             turn_direction = None
 
-        elif abs(orientation_err) > 0.7:
+        elif abs(orientation_err) > 0.72:
             # Use PID for large errors or if no line is visible
             u_d = 0.05
             w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
