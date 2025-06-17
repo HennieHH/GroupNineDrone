@@ -15,12 +15,12 @@ def create_grid():
     return np.array([
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
-        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],
@@ -287,14 +287,37 @@ phi = 1.57111
 oldEncoderValues = [0, 0]
 encoderValues = [0, 0]
 
-# Pathfinding setup
-start_position = (0.531976, -0.364056)  # Robot's starting position
-goal_position = (-0.46339299999999994, 0.330393)  # Target position (example)
+# Define all box pickup and delivery locations
+boxes = [
+    {
+        'pickup': (-0.46339299999999994, 0.330393),
+        'delivery': (0.531976, -0.364056)  # Back to start for first box
+    },
+    {
+        'pickup': (-0.358972, 0.330393),
+        'delivery': (0.431347, -0.364056)
+    },
+    {
+        'pickup': (-0.254551, 0.330393),
+        'delivery': (0.329743, -0.364056)
+    },
+    {
+        'pickup': (-0.15413, 0.330393),
+        'delivery': (0.227713, -0.364056)
+    }
+]
 
-# Generate waypoints using pathfinding
-waypoints = generate_path_waypoints(start_position, goal_position)
+# Mission control variables
+current_box_index = 0
+mission_phase = "pickup"  # "pickup" or "delivery"
+waypoints = []
 current_waypoint_index = 0
 waypoint_reached_threshold = 0.05  # Increased threshold for better reliability
+
+# Generate initial path to first pickup location
+start_position = (x, y)
+goal_position = boxes[current_box_index]['pickup']
+waypoints = generate_path_waypoints(start_position, goal_position)
 
 # Control variables
 e_acc = 0
@@ -315,9 +338,8 @@ line_follow_block_duration = 2.0  # seconds to disable force-follow
 last_snap_time = 0.0
 snap_cooldown = 0.4  # seconds
 
-going_back = True
-box = False
 turn_direction = None  # Initialized somewhere appropriate
+mission_complete = False
 # -------------------------functions------------------------------
 # -------------position-----------
 
@@ -401,10 +423,37 @@ def update_current_waypoint():
         print(f"Moving to waypoint {current_waypoint_index + 1}/{len(waypoints)}: ({xd:.3f}, {yd:.3f})")
         return True
     else:
-         print("All waypoints reached! Mission complete!")
          return False
 
+def advance_mission():
+    global current_box_index, mission_phase, waypoints, current_waypoint_index, e_acc, e_prev
+    global force_line_following, line_follow_start_time, mission_complete
 
+    if mission_phase == "pickup":
+        # Switch to delivery phase
+        mission_phase = "delivery"
+        goal_position = boxes[current_box_index]['delivery']
+        print(f"Box picked up! Delivering to {goal_position}")
+    elif mission_phase == "delivery":
+        # Move to next box
+        current_box_index += 1
+        if current_box_index < len(boxes):
+            mission_phase = "pickup"
+            goal_position = boxes[current_box_index]['pickup']
+            print(f"Box delivered! Moving to next pickup at {goal_position}")
+        else:
+            mission_complete = True
+            print("All boxes delivered! Mission complete!")
+            return False
+
+    # Generate new path
+    waypoints = generate_path_waypoints((x, y), goal_position)
+    current_waypoint_index = 0
+    e_acc = 0
+    e_prev = 0
+    force_line_following = False
+    line_follow_start_time = robot.getTime()
+    return True
 # -------------Line_follower-----------
 
 def line_following_control(gsValues, force_follow=False):
@@ -466,7 +515,7 @@ def correct_position_on_line(x, y, robot_time, last_snap_time):
     If the robot is centered on a line, snap either x or y based on closest grid alignment.
     """
     horizontal_rows = {2, 5, 7, 9, 12}
-    vertical_cols = {0, 8, 16}
+    vertical_cols = {0, 2, 4, 6, 8, 10, 12, 14, 16}
 
     if robot_time - last_snap_time < snap_cooldown:
         return x, y, last_snap_time  # skip correction
@@ -575,24 +624,15 @@ while robot.step(timestep) != -1:
 
     # ------------Waypoint_PID and line_following-------------
 
-    if box == True and going_back == True:
-        print("Box picked up")
-        waypoints = generate_path_waypoints(goal_position, start_position)
-        current_waypoint_index = 0
-        e_acc = 0
-        e_prev = 0
-        force_line_following = False  # Disable override temporarily
-        line_follow_start_time = robot.getTime()
-        going_back = False
-        box = False
 
-    elif position_err < waypoint_reached_threshold:
+
+    if position_err < waypoint_reached_threshold:
         print(f"Waypoint {current_waypoint_index + 1} reached!")
         if not update_current_waypoint():
-            # Mission complete
-            leftSpeed = 0
-            rightSpeed = 0
-            box = True
+            if not advance_mission():
+                # Mission complete
+                leftSpeed = 0
+                rightSpeed = 0
         else:
             continue
 
@@ -611,7 +651,7 @@ while robot.step(timestep) != -1:
 
         elif abs(orientation_err) > 0.72:
             # Use PID for large errors or if no line is visible
-            u_d = 0.05
+            u_d = 0.01
             w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
             wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
             leftSpeed = wl_d
