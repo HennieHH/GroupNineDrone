@@ -78,6 +78,25 @@ def dijkstra(grid, costs, start, goal):
 # -------------------------(grid to world)------------------------------
 
 def grid_to_world(row, col):
+    # Override coordinates for known mismatches
+    manual_overrides = {
+        (0, 2): (0.431347, -0.364056),
+        (0, 4): (0.329743, -0.364056),
+        (0, 6): (0.227713, -0.364056),
+        (1, 2): (0.431976, -0.31445249999999997),
+        (1, 4): (0.329976, -0.31445249999999997),
+        (1, 6): (0.227976, -0.31445249999999997),
+        (13, 10): (-0.15413, 0.2807895000000001),
+        (13, 12): (-0.254551, 0.2807895000000001),
+        (13, 14): (-0.358972, 0.2807895000000001),
+        (14, 10): (-0.15413, 0.330393),
+        (14, 12): (-0.254551, 0.330393),
+        (14, 14): (-0.358972, 0.330393)
+    }
+
+    if (row, col) in manual_overrides:
+        return manual_overrides[(row, col)]
+
     if row == 2:
         manual_row2 = {
             0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
@@ -112,12 +131,34 @@ def grid_to_world(row, col):
     y = y_origin + row * dy_per_row
     return (x, y)
 
-
 # -------------------------(world to grid)------------------------------
 
 def world_to_grid(x, y):
     """Convert world coordinates back to grid coordinates,
-    with special handling for rows 2 and 12."""
+    with special handling for rows 2, 12 and manual overrides."""
+
+    # Manual override: reverse of custom grid_to_world patch
+    manual_reverse = {
+        (0.431347, -0.364056): (0, 2),
+        (0.329743, -0.364056): (0, 4),
+        (0.227713, -0.364056): (0, 6),
+        (0.431976, -0.31445249999999997): (1, 2),
+        (0.329976, -0.31445249999999997): (1, 4),
+        (0.227976, -0.31445249999999997): (1, 6),
+        (-0.15413, 0.2807895000000001): (13, 10),
+        (-0.254551, 0.2807895000000001): (13, 12),
+        (-0.358972, 0.2807895000000001): (13, 14),
+        (-0.15413, 0.330393): (14, 10),
+        (-0.254551, 0.330393): (14, 12),
+        (-0.358972, 0.330393): (14, 14)
+    }
+
+    # Tolerance for matching float coordinates
+    EPS = 1e-6
+    for (mx, my), (r, c) in manual_reverse.items():
+        if abs(mx - x) < EPS and abs(my - y) < EPS:
+            return (r, c)
+
     # Manual mappings from grid_to_world:
     manual_row2 = {
         0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
@@ -132,35 +173,29 @@ def world_to_grid(x, y):
         14: -0.354972, 15: -0.406705, 16: -0.45802
     }
 
-    # Expected y-values for rows 2 and 12
     y_row2 = -0.267049
     y_row12 = 0.227986
-    # Tolerances (half cell size)
     dy = 0.0496035 / 2.0
     dx = abs(-0.0622105625) / 2.0
 
-    # Helper: find column in manual_dict that x is closest to
     def find_manual_col(manual_dict):
-        # find key with minimum |x - value|
         col, x_ref = min(manual_dict.items(), key=lambda kv: abs(kv[1] - x))
         if abs(x_ref - x) <= dx:
             return col
         else:
             return None
 
-    # Try row 2
     if abs(y - y_row2) <= dy:
         col = find_manual_col(manual_row2)
         if col is not None:
             return (2, col)
 
-    # Try row 12
     if abs(y - y_row12) <= dy:
         col = find_manual_col(manual_row12)
         if col is not None:
             return (12, col)
 
-    # Otherwise: standard linear inversion
+    # Default linear fallback
     x_origin = 0.531976
     y_origin = -0.364056
     dx_per_col = -0.0622105625
@@ -169,13 +204,11 @@ def world_to_grid(x, y):
     col = round((x - x_origin) / dx_per_col)
     row = round((y - y_origin) / dy_per_row)
 
-    # Clamp within grid
-    num_rows, num_cols = 15, 17
+    # Clamp
     row = max(0, min(14, row))
     col = max(0, min(16, col))
 
     return (row, col)
-
 
 # -------------------------(waypoints)------------------------------
 
@@ -282,7 +315,7 @@ line_follow_block_duration = 2.0  # seconds to disable force-follow
 last_snap_time = 0.0
 snap_cooldown = 0.4  # seconds
 
-test = False
+going_back = True
 box = False
 turn_direction = None  # Initialized somewhere appropriate
 # -------------------------functions------------------------------
@@ -542,7 +575,7 @@ while robot.step(timestep) != -1:
 
     # ------------Waypoint_PID and line_following-------------
 
-    if box == True and test == False:
+    if box == True and going_back == True:
         print("Box picked up")
         waypoints = generate_path_waypoints(goal_position, start_position)
         current_waypoint_index = 0
@@ -550,7 +583,7 @@ while robot.step(timestep) != -1:
         e_prev = 0
         force_line_following = False  # Disable override temporarily
         line_follow_start_time = robot.getTime()
-        test = True
+        going_back = False
         box = False
 
     elif position_err < waypoint_reached_threshold:
