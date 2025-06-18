@@ -99,13 +99,13 @@ def grid_to_world(row, col):
 
     if row == 2:
         manual_row2 = {
-            0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
-            5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.042291, 9: 0.000142,
+            0: 0.531976, 1: 0.480661, 2: 0.431347, 3: 0.378032, 4: 0.329717,
+            5: 0.275402, 6: 0.227087, 7: 0.172772, 8: 0.042291, 9: 0.000142,
             10: -0.032488, 11: -0.083803, 12: -0.135118, 13: -0.235118,
             14: -0.306433, 15: -0.387748, 16: -0.477393
         }
         x = manual_row2.get(col)
-        y = -0.267049
+        y = -0.268549
         if x is not None:
             return (x, y)
 
@@ -113,11 +113,11 @@ def grid_to_world(row, col):
         manual_row12 = {
             0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
             5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.040142, 9: -0.04013,
-            10: -0.15013, 11: -0.201445, 12: -0.252551, 13: -0.304075,
-            14: -0.354972, 15: -0.406705, 16: -0.45802
+            10: -0.15313, 11: -0.201445, 12: -0.255551, 13: -0.304075,
+            14: -0.357972, 15: -0.406705, 16: -0.45802
         }
         x = manual_row12.get(col)
-        y = 0.227986
+        y = 0.231986
         if x is not None:
             return (x, y)
 
@@ -312,7 +312,7 @@ current_box_index = 0
 mission_phase = "pickup"  # "pickup" or "delivery"
 waypoints = []
 current_waypoint_index = 0
-waypoint_reached_threshold = 0.05  # Increased threshold for better reliability
+waypoint_reached_threshold = 0.045 #0.04 # Increased threshold for better reliability
 
 # Generate initial path to first pickup location
 start_position = (x, y)
@@ -327,19 +327,22 @@ e_prev = 0
 line_following_states = ['forward', 'turn_right', 'turn_left']
 line_following_state = line_following_states[0]
 line_counter = 0
-LINE_COUNTER_MAX = 3  # Reduced for more responsive line following
+LINE_COUNTER_MAX = 2  # Reduced for more responsive line following
 print_timer = 0.0  # Accumulator for debug printing
 print_interval = 0.5  # Time in seconds between prints
 last_replan_time = 0.0
 replan_cooldown = 2.0  # seconds
 force_line_following = False
 line_follow_start_time = 0.0
-line_follow_block_duration = 2.0  # seconds to disable force-follow
+line_follow_block_duration = 3.0  # seconds to disable force-follow
 last_snap_time = 0.0
-snap_cooldown = 0.4  # seconds
-
+snap_cooldown = 0.45  # seconds 0.4
 turn_direction = None  # Initialized somewhere appropriate
 mission_complete = False
+
+error = 0
+PID_turn = False
+PID_turn2 = False
 # -------------------------functions------------------------------
 # -------------position-----------
 
@@ -384,7 +387,7 @@ def get_pose_error(xd, yd, x, y, phi):
     return dist_err, phi_err
 
 
-def pid_controller(e, e_prev, e_acc, delta_t, kp=2.0, kd=0.1, ki=0.00):
+def pid_controller(e, e_prev, e_acc, delta_t, kp=3.5, kd=0.2, ki=0.01):  # Increased gains
     P = kp * e
     I = e_acc + ki * e * delta_t
     D = kd * (e - e_prev) / delta_t
@@ -430,11 +433,13 @@ def advance_mission():
     global force_line_following, line_follow_start_time, mission_complete
 
     if mission_phase == "pickup":
+        start_position = boxes[current_box_index]['pickup']
         # Switch to delivery phase
         mission_phase = "delivery"
         goal_position = boxes[current_box_index]['delivery']
         print(f"Box picked up! Delivering to {goal_position}")
     elif mission_phase == "delivery":
+        start_position = boxes[current_box_index]['delivery']
         # Move to next box
         current_box_index += 1
         if current_box_index < len(boxes):
@@ -447,7 +452,7 @@ def advance_mission():
             return False
 
     # Generate new path
-    waypoints = generate_path_waypoints((x, y), goal_position)
+    waypoints = generate_path_waypoints(start_position, goal_position)
     current_waypoint_index = 0
     e_acc = 0
     e_prev = 0
@@ -465,13 +470,14 @@ def line_following_control(gsValues, force_follow=False):
     global line_following_state, line_counter
 
     # Determine line visibility
-    line_right = gsValues[0] > 400
+    line_right = gsValues[0] > 600
     line_center = gsValues[1] > 600
     line_left = gsValues[2] > 600
 
     centered_on_line = (gsValues[0] > 600 and gsValues[1] < 400 and gsValues[2] > 600)
-    # Stronger base speed
-    base_speed = MAX_SPEED * 0.5
+
+    # Stronger base speed for better control
+    base_speed = MAX_SPEED * 0.6  # Increased from 0.5
 
     # Force robot to follow line even if orientation is off
     if force_follow or centered_on_line:
@@ -491,15 +497,15 @@ def line_following_control(gsValues, force_follow=False):
             line_counter = 0
 
     elif line_following_state == 'turn_right':
-        leftSpeed = 1.0 * base_speed
-        rightSpeed = 0.2 * base_speed
+        leftSpeed = 1.2 * base_speed   # Increased turning strength
+        rightSpeed = 0.1 * base_speed  # Reduced opposing wheel speed
 
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
 
     elif line_following_state == 'turn_left':
-        leftSpeed = 0.2 * base_speed
-        rightSpeed = 1.0 * base_speed
+        leftSpeed = 0.1 * base_speed   # Reduced opposing wheel speed
+        rightSpeed = 1.2 * base_speed  # Increased turning strength
 
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
@@ -644,42 +650,95 @@ while robot.step(timestep) != -1:
                 gsValues[2] > 600
         )
 
+        # Check if robot is on any line (for line following decision)
+        on_line = (gsValues[0] > 600 or gsValues[1] > 600 or gsValues[2] > 600)
+
         if centered_on_line and force_line_following:
             # Force line-following if robot is centered on the line
             leftSpeed, rightSpeed = line_following_control(gsValues, force_follow=True)
             turn_direction = None
+            error = 0
+            PID_turn = False
+            PID_turn2 = False
 
-        elif abs(orientation_err) > 0.72:
-            # Use PID for large errors or if no line is visible
-            u_d = 0.01
-            w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
+        elif abs(orientation_err) > 1.2 or PID_turn2:  # Increased threshold for major corrections
+            # Use strong PID for very large errors
+            print("PID Major Correction")
+            w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t, kp=4.0, kd=0.3)
+            PID_turn2 = True
+            PID_turn = False
+            turn_direction = None
+
+            u_d = 0.008  # Very slow forward movement for precise turning
             wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
             leftSpeed = wl_d
             rightSpeed = wr_d
+
+            if abs(orientation_err) < 0.15:  # Exit condition
+                PID_turn2 = False
+
+        elif abs(orientation_err) > 0.6 or PID_turn:  # Medium corrections
+            # Use moderate PID for medium errors
+            print("PID Minor Correction")
+            w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
+            PID_turn = True
             turn_direction = None
 
-        elif gsValues[0] > 600 and gsValues[1] > 600 and gsValues[2] > 600:
+            u_d = 0.02  # Slow forward movement
+            wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
+            leftSpeed = wl_d
+            rightSpeed = wr_d
+
+            if abs(orientation_err) < 0.3:  # Exit condition
+                PID_turn = False
+
+        elif on_line:
+            # Use line following when on a line
+            leftSpeed, rightSpeed = line_following_control(gsValues, force_follow=False)
+            turn_direction = None
+            error = 0
+            PID_turn = False
+            PID_turn2 = False
+
+        elif gsValues[0] > 700 and gsValues[1] > 700 and gsValues[2] > 700:
             # Fallback: All sensors see white - turn in direction of orientation error
+            error += 1
+            if error >= 8:  # Reduced from 12 for faster response
+                if turn_direction is None:
+                    if orientation_err > 0:
+                        turn_direction = 'left'
+                    else:
+                        turn_direction = 'right'
 
-            if turn_direction is None:
-                if orientation_err > 0: # Need to turn left (counterclockwise)
-                   turn_direction = 'left'
-                else:# Need to turn right (clockwise)
-                    turn_direction = 'right'
+                if turn_direction == 'left':
+                    print("All sensors detect white - turning left to search for line")
+                    leftSpeed = -0.5  # Reduced turning speed
+                    rightSpeed = 0.5
+                else:
+                    print("All sensors detect white - turning right to search for line")
+                    leftSpeed = 0.5
+                    rightSpeed = -0.5
 
-            if turn_direction == 'left':
-                print("All sensors detect white - turning left to search for line")
-                leftSpeed = 0
-                rightSpeed = 1
-            else:
-                print("All sensors detect white - turning right to search for line")
-                leftSpeed = 1
-                rightSpeed = 0
+                if error >= 20:  # Reset after trying
+                    error = 0
+                    turn_direction = None
 
         else:
-            # Default: use line following
-            leftSpeed, rightSpeed = line_following_control(gsValues)
+            # Default: move towards waypoint with basic control
+            if orientation_err > 0.1:
+                leftSpeed = MAX_SPEED * 0.3
+                rightSpeed = MAX_SPEED * 0.6
+            elif orientation_err < -0.1:
+                leftSpeed = MAX_SPEED * 0.6
+                rightSpeed = MAX_SPEED * 0.3
+            else:
+                leftSpeed = MAX_SPEED * 0.5
+                rightSpeed = MAX_SPEED * 0.5
+
             turn_direction = None
+            error = 0
+            PID_turn = False
+            PID_turn2 = False
 
     # Clamp speeds
     leftSpeed = max(-MAX_SPEED, min(MAX_SPEED, leftSpeed))
