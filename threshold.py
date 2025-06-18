@@ -11,10 +11,4 @@ def determine_line_visibility(normalized_values):
     line_right      = normalized_values[3] > 3000 # Sensor 4 (rechts-midden)
     line_far_right  = normalized_values[4] > 4000 # Sensor 5 (rechts)
 
-    return {
-        'line_far_left':  line_far_left,
-        'line_left':      line_left,
-        'line_center':    line_center,
-        'line_right':     line_right,
-        'line_far_right': line_far_right
-    }
+    return line_far_left, line_left, line_center, line_right, line_far_right
