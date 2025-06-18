@@ -1,13 +1,13 @@
 from machine import Pin
 import time
 
-
 class IR_Magnet:
     def __init__(self, goal_reached=False):
+        #Sensor and magnet init
         self.sensor = Pin(16, Pin.IN, Pin.PULL_UP)
         self.magnet = Pin(26, Pin.OUT)
         self.magnet.off()
-
+        # Flags for time and object not detected
         self.detection_start = None
         self.triggered = False
         self.clear_count = 0
@@ -17,10 +17,10 @@ class IR_Magnet:
         self.drop_start_time = None
         self.drop_active = False
 
-    def set_goal_reached(self, goal_reached):
+    def set_goal_reached(self, goal_reached): # function used to Set goal reached
         self.goal_reached = goal_reached
 
-    def obstacle_detection(self):
+    def obstacle_detection(self): # used for reading ir sensor and turing on magnet
         if self.drop_active:
             if time.time() - self.drop_start_time >= 10:
                 self.drop_active = False
@@ -56,17 +56,18 @@ class IR_Magnet:
 
         return False
 
-
+'''''
 # Initialize detector + button
-detector = IR_Magnet(goal_reached=False)
-button = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Button to GND, GPIO 15 with pull-down
+detector = IR_Magnet(goal_reached=False) # This is a way to import the class 
+button = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Button to GND, GPIO 15 with pull-down # Test code for Goals reached statments 
 
 while True:
-    detector.obstacle_detection()
+    detector.obstacle_detection() # calling the function for checking the ir sensor and activating the magnet 
 
     if button.value():  # Button pressed
-        detector.set_goal_reached(True)
+        detector.set_goal_reached(True) # Used to set goal reached, turns off the Magnet for 10 seconds 
         print("Button pressed: Goal set to True")
         time.sleep(0.5)  # Debounce delay
 
     time.sleep(0.1)
+'''''
