@@ -14,7 +14,7 @@ print("VL53L0X Distance Sensor with Weighted Average Filter (Last 10 Samples)")
 distance_buffer = []
 
 # Weights for the last 5 samples (newest to oldest)
-weights = [0.004,0.007,0.012,0.020,0.034,0.055,0.089,0.146,0.239,0.393]
+weights = [0.393, 0.239, 0.146, 0.089, 0.055, 0.034, 0.020, 0.012, 0.007, 0.004]
 total_weight = sum(weights)
 
 while True:

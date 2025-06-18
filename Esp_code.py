@@ -6,8 +6,8 @@ import math  # Import math module for mathematical functions
 import VL53L0X as VL
 
 # -------------------------(hardware setup)-------------------------
-encoderA = Pin(18, Pin.IN)
-encoderB = Pin(19, Pin.IN)
+encoderA_L = Pin(18, Pin.IN)
+encoderB_L = Pin(19, Pin.IN)
 
 encoderA_R = Pin(22, Pin.IN)
 encoderB_R = Pin(23, Pin.IN)
@@ -18,7 +18,7 @@ ToF_sensor = VL.VL53L0X(i2c)
 distance_buffer = []
 
 # Weights for the last 5 samples (newest to oldest)
-ToF_weights = [0.004, 0.007, 0.012, 0.020, 0.034, 0.055, 0.089, 0.146, 0.239, 0.393]
+ToF_weights = [0.393, 0.239, 0.146, 0.089, 0.055, 0.034, 0.020, 0.012, 0.007, 0.004]
 total_ToF_weight = sum(ToF_weights)
 
 line_sensor_pins = [27, 26, 25, 33, 32]
@@ -45,20 +45,6 @@ def init_sensors(pins=None):
 
 
 line_sensors = init_sensors()
-
-# led_board = Pin(2, Pin.OUT)  # Initialize LED on pin 2 as output (board indicator)
-# led_green = Pin(22, Pin.OUT)  # Initialize green LED on pin 22 as output
-# led_red = Pin(21, Pin.OUT)  # Initialize red LED on pin 21 as output
-# button_left = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Initialize left button on pin 34 as input with pull-down resistor
-
-# print("Click the button on the ESP32 to continue. Then, close Thonny and run the Webots simulation.")
-# Prompt user to press the left button to continue setup
-# while button_left() == False:  # Loop until the left button is pressed
-#    time.sleep(0.25)  # Sleep for 0.25 seconds to debounce button
-#    led_board.value(not led_board())  # Toggle board LED to indicate waiting state
-
-# ----Set serial to UART1--------
-# uart = UART(2, 115200)  # Initialize UART interface on UART2 at 115200 baud rate
 
 # -------------------------(dijkstra)------------------------------
 
@@ -475,6 +461,23 @@ last_snap_time = 0.0  # Timestamp of last snap
 last_replan_time = 0.0  # Timestamp of last replanning event
 replan_cooldown = 3.0  # Minimum seconds between replanning attempts
 
+
+#----------------------Line_sensor--------------------------
+def determine_line_visibility(normalized_values):
+    """
+    Determine line visibility for each sensor position.
+    Returns boolean values indicating if line is detected.
+    Based on normalized sensor values (0-1000 scale).
+    """
+    # Line visibility thresholds - adjust these values based on your testing
+    line_far_left   = normalized_values[0] > 900    # Sensor 1 (links)
+    line_left       = normalized_values[1] > 900 # Sensor 2 (links-midden)
+    line_center     = normalized_values[2] > 900 # Sensor 3 (midden)
+    line_right      = normalized_values[3] > 900 # Sensor 4 (rechts-midden)
+    line_far_right  = normalized_values[4] > 900 # Sensor 5 (rechts)
+
+    return line_far_left, line_left, line_center, line_right, line_far_right
+
 # -------------------------Line Following------------------------------
 
 """
@@ -491,16 +494,19 @@ replan_cooldown = 3.0  # Minimum seconds between replanning attempts
     """
 
 
-def line_following_control(gsValues, force_follow=False):
+def line_following_control(normalized_values, force_follow=False):
     global line_following_state, line_counter  # Use and update global state variables
 
     # Determine line visibility based on thresholded sensor readings
-    line_right = gsValues[0] > 400  # True if leftmost ground sensor detects dark line
-    line_center = gsValues[1] > 600  # True if center ground sensor strongly over line
-    line_left = gsValues[2] > 600  # True if rightmost ground sensor strongly over line
-    centered_on_line = (gsValues[0] > 600 and gsValues[1] < 400 and gsValues[2] > 600)
+    line_far_left   = normalized_values[0] > 900    # Sensor 1 (links)
+    line_left       = normalized_values[1] > 900 # Sensor 2 (links-midden)
+    line_center     = normalized_values[2] > 900 # Sensor 3 (midden)
+    line_right      = normalized_values[3] > 900 # Sensor 4 (rechts-midden)
+    line_far_right  = normalized_values[4] > 900 # Sensor 5 (rechts)
     # True if front-center sensor off but sides detect line
-
+    centered_on_line = (  # Determine if robot is centered on a line using ground sensors
+            line_left and line_center and line_right
+    )
     # Define a stronger base speed for line following (half of max)
     base_speed = MAX_SPEED * 0.5
 
@@ -519,6 +525,12 @@ def line_following_control(gsValues, force_follow=False):
         elif line_left and not line_right:  # If line detected more on left side
             line_following_state = 'turn_left'  # Switch to turning left state
             line_counter = 0
+        elif line_far_left and not line_center:
+            line_following_state = 'turn_far_left'
+            line_counter = 0
+        elif line_far_right and not line_center:
+            line_following_state = 'turn_far_right'
+            line_counter = 0
     elif line_following_state == 'turn_right':  # If in turn right state
         leftSpeed = 1.0 * base_speed  # Left wheel faster
         rightSpeed = 0.2 * base_speed  # Right wheel slower
@@ -528,6 +540,16 @@ def line_following_control(gsValues, force_follow=False):
         leftSpeed = 0.2 * base_speed  # Left wheel slower
         rightSpeed = 1.0 * base_speed  # Right wheel faster
         if line_counter >= LINE_COUNTER_MAX:  # After enough counts, switch back
+            line_following_state = 'forward'
+    elif line_following_state == 'turn_far_left':
+        leftSpeed = 0.2 * base_speed  # Left wheel slower
+        rightSpeed = 1.2 * base_speed  # Right wheel faster
+        if line_counter >= LINE_COUNTER_MAX:
+            line_following_state = 'forward'
+    elif line_following_state == 'turn_far_right':
+        leftSpeed = 1.2 * base_speed
+        rightSpeed = 0.2 * base_speed
+        if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
 
     line_counter += 1  # Increment counter each call
@@ -764,7 +786,7 @@ def update_current_waypoint():
 while True:  # Main control loop, runs indefinitely
     current_time += 0.02  # Increment simulated time by approximate loop interval
 
-    # ----------- See (Position) -----------
+    # ----------- (Position) -----------
     new_l = pulse_l
     new_r = pulse_r
 
@@ -779,37 +801,39 @@ while True:  # Main control loop, runs indefinitely
     old_r = new_r
 
     # -----------ToF_sensor--------------
-    raw_distance = ToF_sensor.read() - 25  # Apply offset correction - 25 mm
+    raw_distance = ToF_sensor.read() - 25  # Apance = weighted_sum / ply offset correction - 25 mm
     distance_buffer.insert(0, raw_distance)  # Add new reading at the front
     # Limit buffer to last 10 readings
     if len(distance_buffer) > 10:
         distance_buffer.pop()
     # Compute weighted average if buffer has enough data
     if len(distance_buffer) == 10:
-        weighted_sum = sum(distance_buffer[i] * weights[i] for i in range(10))
+        weighted_sum = sum(distance_buffer[i] * ToF_weights[i] for i in range(10))
         filtered_ToF_distance = weighted_sum / total_ToF_weight
         print("Raw: {:>4} mm | Filtered (10-sample weighted): {:.2f} mm".format(raw_distance, filtered_ToF_distance))
     else:
         # Not enough data for full filter
         print("Raw: {:>4} mm | Filtered: N/A (collecting data...)".format(raw_distance))
 
+        # ------------line_sensors------------------
+    line_data = read_all_data(line_sensors)
+    line_position = line_data['position']
+    line_norm = line_data['normalized']
+    norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
+    print(f"{norm_str}  |  Position: {line_data['position']}")
+
+    line_far_left, line_left, line_center, line_right, line_far_right = determine_line_visibility(line_norm)
+
         # ----------- Position Correction -----------
     centered_on_line = (  # Determine if robot is centered on a line using ground sensors
-            gsValues[0] > 600 and
-            gsValues[1] < 400 and
-            gsValues[2] > 600
+            line_left and line_center and line_right
     )
     if centered_on_line:  # If robot is centered on line, attempt snapping
         old_x, old_y = x, y  # Save old coordinates for comparison
         x, y, last_snap_time = correct_position_on_line(x, y, current_time, last_snap_time)  # Snap if needed
 
         # Send corrected position to Webots if position was adjusted
-    # ------------line_sensors------------------
-    line_data = read_all_data(line_sensors)
-    line_position = line_data['position']
-    line_norm = line_data['normalized']
-    norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
-    print(f"{norm_str}  |  Position: {line_data['position']}")
+
 
     # ----------- Pathfinding -----------
     if not waypoints_generated:  # If waypoints have not yet been generated
@@ -887,19 +911,12 @@ while True:  # Main control loop, runs indefinitely
                 force_line_following = True  # Re-enable line-follow override
                 print("Line-follow override re-enabled.")
 
-            # Check if robot is centered on line with slightly lower thresholds
-            centered_on_line = (
-                    gsValues[0] > 500 and
-                    gsValues[1] < 400 and
-                    gsValues[2] > 500
-            )
-
             # Decision logic for control method
             if centered_on_line and force_line_following:
                 # If centered on line and override is active, use line following
-                leftSpeed, rightSpeed = line_following_control(gsValues, force_follow=True)
+                leftSpeed, rightSpeed = line_following_control(line_norm, force_follow=True)
 
-            elif abs(orientation_err) > 1.0 or (gsValues[0] > 600 and gsValues[1] > 600 and gsValues[2] > 600):
+            elif abs(orientation_err) > 1.0 or (line_far_left and line_left and line_center and line_right and line_far_right):
                 # If orientation error is large or all ground sensors detect off-line, use PID control
                 u_d = 0.05  # Fixed small forward speed
                 w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)  # Compute angular speed
@@ -913,7 +930,7 @@ while True:  # Main control loop, runs indefinitely
 
             else:
                 # Default: use line-following control
-                leftSpeed, rightSpeed = line_following_control(gsValues)
+                leftSpeed, rightSpeed = line_following_control(line_norm)
 
     else:
         # All waypoints have been reached
@@ -923,13 +940,11 @@ while True:  # Main control loop, runs indefinitely
     # ----------- Act (Send motor commands) -----------
     if 'leftSpeed' in locals() and 'rightSpeed' in locals():  # Ensure speeds have been computed
         motor_cmd = f"MOTOR:{leftSpeed:.4f},{rightSpeed:.4f}\n"  # Format motor command string
-        uart.write(motor_cmd)  # Send motor command over UART
 
         # Debug output at a reduced frequency (every 0.1 seconds)
         if current_waypoint_index < len(waypoints) and int(current_time * 10) % 10 == 0:
             print(f"Target: ({waypoints[current_waypoint_index][0]:.3f}, {waypoints[current_waypoint_index][1]:.3f})")
             print(f"Current: ({x:.3f}, {y:.3f}) | Speeds: L={leftSpeed:.3f}, R={rightSpeed:.3f}")
-            print(f"GS values: {gsValues[0]:.0f}, {gsValues[1]:.0f}, {gsValues[2]:.0f}")
 
     time.sleep(0.02)  # Sleep for 0.02 seconds to maintain loop timing
 
