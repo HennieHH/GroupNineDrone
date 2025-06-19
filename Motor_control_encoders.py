@@ -3,14 +3,14 @@ import time
 
 
 class MotorController:
-    def __init__(self, in1_pin, in2_pin, freq=100, min_speed=30):
+    def __init__(self, in1_pin, in2_pin, freq=1000, min_speed=30):
         """
         Initialize L298N motor controller without enable pin
 
         Args:
             in1_pin: GPIO pin for IN1 (PWM direction control)
             in2_pin: GPIO pin for IN2 (PWM direction control)
-            freq: PWM frequency in Hz (default 100Hz)
+            freq: PWM frequency in Hz (default 1000Hz)
             min_speed: Minimum speed percentage to overcome motor friction
         """
         self.in1 = PWM(Pin(in1_pin), freq=freq)
@@ -57,3 +57,26 @@ class MotorController:
 
         self.current_speed = speed
         print(f"Motor forward at {speed}% speed (Duty: {duty})")
+
+print("Starting motor test in 2 seconds...")
+time.sleep(2)
+
+motora = MotorController(4, 16)
+motorb = MotorController(12, 14)
+
+print("Testing motor A at 30%")
+motora.forward(40)
+time.sleep(3)
+
+print("Testing motor B at 30%")
+motorb.forward(40)
+time.sleep(3)
+
+print("Increasing both motors")
+motora.forward(70)
+motorb.forward(70)
+time.sleep(3)
+
+print("Stopping motors")
+motora.stop()
+motorb.stop()
