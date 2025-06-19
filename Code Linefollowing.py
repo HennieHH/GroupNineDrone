@@ -276,8 +276,8 @@ rightMotor.setVelocity(0.0)
 # -------------------------(Parameters)------------------------------
 
 # Robot parameters
-R = 0.0205  # Wheel radius [m]
-D = 0.057  # Distance between wheels [m]
+R = 0.0336    # radius of the wheels of the e-puck robot: 33.6mm
+D = 0.097    # inside distance between the wheels of the e-puck robot: 97mm
 delta_t = timestep / 1000.0  # 0.016
 
 # Position tracking variables (odometry only)
