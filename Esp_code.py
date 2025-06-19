@@ -1,10 +1,10 @@
 # -------------------------import--------------------
-from machine import I2C, Pin, ADC  # Import Pin and UART classes from the machine module for hardware control
+from machine import I2C, Pin, ADC, PWM  # Import Pin and UART classes from the machine module for hardware control
 import time  # Import time module for sleep and time tracking
 import heapq  # Import heapq module for priority queue in Dijkstra’s algorithm
 import math  # Import math module for mathematical functions
 import VL53L0X as VL
-
+from Motor_control_encoders import MotorController
 # -------------------------(hardware setup)-------------------------
 encoderA_L = Pin(18, Pin.IN)
 encoderB_L = Pin(19, Pin.IN)
@@ -26,6 +26,13 @@ weights = [0, 1000, 2000, 3000, 4000]
 min_vals = [1349, 1407, 1563, 1083, 810]
 max_vals = [2143, 2274, 2559, 1892, 1454]
 
+# Pin configuration (adjust these to match your wiring)
+IN1_PIN = 26  # GPIO26 to L298N IN1
+IN2_PIN = 27  # GPIO27 to L298N IN2
+# No ENA pin needed - tie ENA to VCC (high) on the L298N board
+
+# Create motor controller instance
+motor = MotorController(IN1_PIN, IN2_PIN)
 
 def init_sensors(pins=None):
     """
@@ -413,12 +420,12 @@ waypoints_generated = False  # Flag indicating whether waypoints have been gener
 current_waypoint_index = 0  # Index of the current waypoint being pursued
 
 # Robot motion state parameters
-R = 0.0205  # Wheel radius (meters)
-D = 0.057  # Distance between wheels (meters)
+R = 0.0336    # radius of the wheels of the e-puck robot: 33.6mm
+D = 0.097    # inside distance between the wheels of the e-puck robot: 97mm
 delta_t = 0.016  # Loop time interval estimate (seconds)
 x, y = 0, 0  # Initialize robot’s current world x, y position
 phi = 0  # Initialize robot’s heading (radians)
-MAX_SPEED = 6.28  # Maximum wheel angular speed (rad/s)
+MAX_SPEED = 80  # Maximum wheel angular speed (rad/s)
 
 pulse_l = 0
 last_A_l = encoderA_L.value()
@@ -508,7 +515,7 @@ def line_following_control(normalized_values, force_follow=False):
             line_left and line_center and line_right
     )
     # Define a stronger base speed for line following (half of max)
-    base_speed = MAX_SPEED * 0.5
+    base_speed = MAX_SPEED * 0.7
 
     # If forced to follow or robot is centered, reset to forward state
     if force_follow or centered_on_line:
