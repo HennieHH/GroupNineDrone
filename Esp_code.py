@@ -26,13 +26,17 @@ weights = [0, 1000, 2000, 3000, 4000]
 min_vals = [1349, 1407, 1563, 1083, 810]
 max_vals = [2143, 2274, 2559, 1892, 1454]
 
-# Pin configuration (adjust these to match your wiring)
-IN1_PIN = 26  # GPIO26 to L298N IN1
-IN2_PIN = 27  # GPIO27 to L298N IN2
-# No ENA pin needed - tie ENA to VCC (high) on the L298N board
+# Pin configuration for motors (adjust these to match your wiring)
+IN1_PIN_A = 26  # GPIO26 to L298N IN1
+IN2_PIN_A = 27  # GPIO27 to L298N IN2
+
+IN1_PIN_B = 14
+IN2_PIN_B = 12
 
 # Create motor controller instance
-motor = MotorController(IN1_PIN, IN2_PIN)
+motorA = MotorController(IN1_PIN_A, IN2_PIN_A)
+motorB = MotorController(IN1_PIN_B, IN2_PIN_B)
+
 
 def init_sensors(pins=None):
     """
@@ -80,8 +84,7 @@ def create_grid():
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 10: same as row 8
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 11: same as row 10
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 12: all free
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0],
-        # Row 13: mostly blocked with some free at col 10, 12, 14, 16
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0], # Row 13: mostly blocked with some free at col 10, 12, 14, 16
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0]  # Row 14: same as row 13
     ]
 
@@ -426,7 +429,8 @@ delta_t = 0.016  # Loop time interval estimate (seconds)
 x, y = 0, 0  # Initialize robot’s current world x, y position
 phi = 0  # Initialize robot’s heading (radians)
 MAX_SPEED = 80  # Maximum wheel angular speed (rad/s)
-
+leftSpeed = 0
+rightSpeed = 0
 pulse_l = 0
 last_A_l = encoderA_L.value()
 pulse_r = 0
@@ -515,7 +519,7 @@ def line_following_control(normalized_values, force_follow=False):
             line_left and line_center and line_right
     )
     # Define a stronger base speed for line following (half of max)
-    base_speed = MAX_SPEED * 0.7
+    base_speed = MAX_SPEED * 0.8
 
     # If forced to follow or robot is centered, reset to forward state
     if force_follow or centered_on_line:
@@ -540,22 +544,22 @@ def line_following_control(normalized_values, force_follow=False):
             line_counter = 0
     elif line_following_state == 'turn_right':  # If in turn right state
         leftSpeed = 1.0 * base_speed  # Left wheel faster
-        rightSpeed = 0.2 * base_speed  # Right wheel slower
+        rightSpeed = 0.45 * base_speed  # Right wheel slower
         if line_counter >= LINE_COUNTER_MAX:  # After a few iterations, return to forward
             line_following_state = 'forward'
     elif line_following_state == 'turn_left':  # If in turn left state
-        leftSpeed = 0.2 * base_speed  # Left wheel slower
+        leftSpeed = 0.45 * base_speed  # Left wheel slower
         rightSpeed = 1.0 * base_speed  # Right wheel faster
         if line_counter >= LINE_COUNTER_MAX:  # After enough counts, switch back
             line_following_state = 'forward'
     elif line_following_state == 'turn_far_left':
-        leftSpeed = 0.2 * base_speed  # Left wheel slower
-        rightSpeed = 1.2 * base_speed  # Right wheel faster
+        leftSpeed = 0.45 * base_speed  # Left wheel slower
+        rightSpeed = 1.1 * base_speed  # Right wheel faster
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
     elif line_following_state == 'turn_far_right':
-        leftSpeed = 1.2 * base_speed
-        rightSpeed = 0.2 * base_speed
+        leftSpeed = 1.1 * base_speed
+        rightSpeed = 0.45 * base_speed
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
 
@@ -945,6 +949,8 @@ while True:  # Main control loop, runs indefinitely
         rightSpeed = 0
 
     # ----------- Act (Send motor commands) -----------
+    motorA.forward(leftSpeed)
+    motorB.forward(rightSpeed)
     if 'leftSpeed' in locals() and 'rightSpeed' in locals():  # Ensure speeds have been computed
         motor_cmd = f"MOTOR:{leftSpeed:.4f},{rightSpeed:.4f}\n"  # Format motor command string
 
