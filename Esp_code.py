@@ -862,8 +862,8 @@ while True:  # Main control loop, runs indefinitely
 
             if len(new_waypoints) == 0:  # If no valid alternative path found
                 print("No alternative path found!")
-                leftSpeed = 0  # Stop robot
-                rightSpeed = 0
+                motorA.stop()
+                motorB.stop()
             else:
                 waypoints = new_waypoints  # Update waypoints to new path
                 current_waypoint_index = 0  # Reset waypoint index
@@ -878,8 +878,8 @@ while True:  # Main control loop, runs indefinitely
     # Check if we have waypoints to follow
     if len(waypoints) == 0:  # If no waypoints exist
         print("No valid path found!")
-        leftSpeed = 0  # Stop robot
-        rightSpeed = 0
+        motorA.stop()
+        motorB.stop()
     elif current_waypoint_index < len(waypoints):  # If there are still waypoints to pursue
         # Get current target waypoint
         xd, yd = waypoints[current_waypoint_index]  # Extract x, y of current waypoint
@@ -891,8 +891,8 @@ while True:  # Main control loop, runs indefinitely
         if position_err < waypoint_reached_threshold:
             print(f"Waypoint {current_waypoint_index + 1} reached!")
             if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
-                leftSpeed = 0  # Stop robot
-                rightSpeed = 0
+                motorA.stop()
+                motorB.stop()
 
             else:
                 # Move to next waypoint, recalculate errors if any remain
@@ -900,8 +900,8 @@ while True:  # Main control loop, runs indefinitely
                     xd, yd = waypoints[current_waypoint_index]  # New waypoint coords
                     position_err, orientation_err = get_pose_error(xd, yd, x, y, phi)  # Recompute errors
                 else:
-                    leftSpeed = 0  # No further waypoints, stop
-                    rightSpeed = 0
+                    motorA.stop()
+                    motorB.stop()
 
         # Control decision logic for how to drive toward waypoint
         if current_waypoint_index < len(waypoints):
@@ -933,8 +933,8 @@ while True:  # Main control loop, runs indefinitely
 
     else:
         # All waypoints have been reached
-        leftSpeed = 0  # Stop robot
-        rightSpeed = 0
+        motorA.stop()
+        motorB.stop()
 
     # ----------- Act (Send motor commands) -----------
     motorA.forward(leftSpeed)
