@@ -168,41 +168,40 @@ def dijkstra(grid, costs, start, goal):
 
 
 def grid_to_world(row, col):
-    if row == 2:  # Special handling for row 2
-        manual_row2 = {  # Mapping of column → x-coordinate for row 2
-            0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
-            5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.042291, 9: 0.000142,
-            10: -0.032488, 11: -0.083803, 12: -0.135118, 13: -0.235118,
-            14: -0.306433, 15: -0.387748, 16: -0.477393
-        }
-        x = manual_row2.get(col)  # Look up x from manual mapping
-        y = -0.267049  # Fixed y for row 2
-        if x is not None:
-            return (x, y)  # Return manual-mapped coordinates
+    manual_coords = {
+        0: {0: 0.000000, 2: 0.150000, 4: 0.300000, 6: 0.459000},
+        1: {0: 0.000000, 2: 0.153000, 4: 0.306000, 6: 0.459000},
+        2: {
+            0: 0.000000, 1: 0.076500, 2: 0.153000, 3: 0.229500, 4: 0.306000,
+            5: 0.382500, 6: 0.455000, 7: 0.604000, 8: 0.745000, 9: 0.838125,
+            10: 0.931250, 11: 1.024375, 12: 1.117500, 13: 1.210625,
+            14: 1.303750, 15: 1.396875, 16: 1.490000
+        },
+        12: {
+            0: 0.000000, 1: 0.076500, 2: 0.153000, 3: 0.229500, 4: 0.306000,
+            5: 0.382500, 6: 0.459000, 7: 0.535500, 8: 0.745000, 9: 0.890000,
+            10: 1.031000, 11: 1.107500, 12: 1.184000, 13: 1.260500,
+            14: 1.337000, 15: 1.413500, 16: 1.490000
+        },
+        13: {10: 1.031000, 12: 1.184000, 14: 1.337000, 16: 1.490000},
+        14: {10: 1.031000, 12: 1.184000, 14: 1.337000, 16: 1.490000}
+    }
 
-    if row == 12:  # Special handling for row 12
-        manual_row12 = {  # Mapping of column → x-coordinate for row 12
-            0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
-            5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.040142, 9: -0.04013,
-            10: -0.15013, 11: -0.201445, 12: -0.252551, 13: -0.304075,
-            14: -0.354972, 15: -0.406705, 16: -0.45802
-        }
-        x = manual_row12.get(col)  # Look up x from manual mapping for row 12
-        y = 0.227986  # Fixed y for row 12
-        if x is not None:
-            return (x, y)  # Return manual-mapped coordinates
+    manual_ys = {
+        0: 0.000000, 1: 0.115000, 2: 0.230000, 3: 0.310000,
+        4: 0.375000, 5: 0.448000, 6: 0.520000, 7: 0.595000,
+        8: 0.670000, 9: 0.750000, 10: 0.820000, 11: 0.900000,
+        12: 0.960000, 13: 1.075000, 14: 1.190000
+    }
 
-    # Default mapping for other rows
-    x_origin = 0.531976  # World x-coordinate for grid cell (row=0, col=0)
-    y_origin = -0.364056  # World y-coordinate for grid cell (row=0, col=0)
-    dx_per_col = -0.0622105625  # Change in x per column step
-    dy_per_row = 0.0496035  # Change in y per row step
+    if row in manual_coords and col in manual_coords[row]:
+        return (manual_coords[row][col], manual_ys[row])
 
-    x = x_origin + col * dx_per_col  # Compute x by offsetting origin by column index
-    y = y_origin + row * dy_per_row  # Compute y by offsetting origin by row index
-    return (x, y)  # Return world coordinates
-
-
+    # Fallback: linear spacing for unmapped x
+    dx_per_col = 0.093125
+    x = col * dx_per_col
+    y = manual_ys.get(row, row * 0.085)  # fallback y if missing
+    return (x, y)
 # -------------------------(world to grid)------------
 
 """
@@ -218,66 +217,55 @@ def grid_to_world(row, col):
 
 
 def world_to_grid(x, y):
-    manual_row2 = {  # Manual x-mappings for row 2
-        0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
-        5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.042291, 9: 0.000142,
-        10: -0.032488, 11: -0.083803, 12: -0.135118, 13: -0.235118,
-        14: -0.306433, 15: -0.387748, 16: -0.457393
-    }
-    manual_row12 = {  # Manual x-mappings for row 12
-        0: 0.531976, 1: 0.480661, 2: 0.429347, 3: 0.378032, 4: 0.326717,
-        5: 0.275402, 6: 0.224087, 7: 0.172772, 8: 0.040142, 9: -0.04013,
-        10: -0.15013, 11: -0.201445, 12: -0.252551, 13: -0.304075,
-        14: -0.354972, 15: -0.406705, 16: -0.45802
+    manual_ys = {
+        0: 0.000000, 1: 0.115000, 2: 0.230000, 3: 0.310000,
+        4: 0.375000, 5: 0.448000, 6: 0.520000, 7: 0.595000,
+        8: 0.670000, 9: 0.750000, 10: 0.820000, 11: 0.900000,
+        12: 0.960000, 13: 1.075000, 14: 1.190000
     }
 
-    y_row2 = -0.267049  # Expected y-value for row 2
-    y_row12 = 0.227986  # Expected y-value for row 12
-    dy = 0.0496035 / 2.0  # Tolerance in y (half cell height)
-    dx = abs(-0.0622105625) / 2.0  # Tolerance in x (half cell width)
+    manual_coords = {
+        0: {0: 0.000000, 2: 0.150000, 4: 0.300000, 6: 0.459000},
+        1: {0: 0.000000, 2: 0.153000, 4: 0.306000, 6: 0.459000},
+        2: {
+            0: 0.000000, 1: 0.076500, 2: 0.153000, 3: 0.229500, 4: 0.306000,
+            5: 0.382500, 6: 0.455000, 7: 0.604000, 8: 0.745000, 9: 0.838125,
+            10: 0.931250, 11: 1.024375, 12: 1.117500, 13: 1.210625,
+            14: 1.303750, 15: 1.396875, 16: 1.490000
+        },
+        12: {
+            0: 0.000000, 1: 0.076500, 2: 0.153000, 3: 0.229500, 4: 0.306000,
+            5: 0.382500, 6: 0.459000, 7: 0.535500, 8: 0.745000, 9: 0.890000,
+            10: 1.031000, 11: 1.107500, 12: 1.184000, 13: 1.260500,
+            14: 1.337000, 15: 1.413500, 16: 1.490000
+        },
+        13: {10: 1.031000, 12: 1.184000, 14: 1.337000, 16: 1.490000},
+        14: {10: 1.031000, 12: 1.184000, 14: 1.337000, 16: 1.490000}
+    }
 
-    """
-        Helper function to find the column index whose mapped x-value is closest to the input x.
-        Returns:
-            col index if within tolerance, otherwise None.
-        """
+    dx = 0.0765 / 2
+    dy = 0.0575  # slightly larger y-tolerance
 
-    def find_manual_col(manual_dict):
+    def find_manual_match():
+        for row, y_ref in manual_ys.items():
+            if abs(y - y_ref) <= dy:
+                for col, x_ref in manual_coords.get(row, {}).items():
+                    if abs(x - x_ref) <= dx:
+                        return (row, col)
+        return None
 
-        col, x_ref = min(manual_dict.items(), key=lambda kv: abs(kv[1] - x))  # Find entry with minimal |x - mapped_x|
-        if abs(x_ref - x) <= dx:  # Check if within x tolerance
-            return col  # Return column index
-        else:
-            return None  # No valid column match
+    result = find_manual_match()
+    if result:
+        return result
 
-    # Check if within y tolerance of row 2
-    if abs(y - y_row2) <= dy:
-        col = find_manual_col(manual_row2)  # Attempt to match x to manual mapping
-        if col is not None:
-            return (2, col)  # Return grid cell if matched
+    # Fallback: approximate linear mapping
+    dx_per_col = 0.093125
+    x_origin = 0.000000
+    col = round((x - x_origin) / dx_per_col)
 
-    # Check if within y tolerance of row 12
-    if abs(y - y_row12) <= dy:
-        col = find_manual_col(manual_row12)  # Attempt to match x to manual mapping
-        if col is not None:
-            return (12, col)  # Return grid cell if matched
-
-    # Otherwise, apply inverse linear mapping
-    x_origin = 0.531976  # Same origin as grid_to_world
-    y_origin = -0.364056  # Same origin as grid_to_world
-    dx_per_col = -0.0622105625  # Same spacing as grid_to_world
-    dy_per_row = 0.0496035  # Same spacing as grid_to_world
-
-    col = round((x - x_origin) / dx_per_col)  # Compute approximate column index
-    row = round((y - y_origin) / dy_per_row)  # Compute approximate row index
-
-    # Clamp indices to valid grid bounds
-    num_rows, num_cols = 15, 17
-    row = max(0, min(num_rows - 1, row))  # Ensure row is within [0, num_rows-1]
-    col = max(0, min(num_cols - 1, col))  # Ensure col is within [0, num_cols-1]
-
-    return (row, col)  # Return discrete grid coordinates
-
+    # Match closest y row from table
+    row = min(manual_ys, key=lambda r: abs(y - manual_ys[r]))
+    return (row, col)
 
 # --------------------position correction-----------------------
 
