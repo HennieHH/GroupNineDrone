@@ -378,7 +378,7 @@ def detect_obstacle_ahead(x, y, phi, distance):
     obstacle_detected = distance < obstacle_threshold
 
     if obstacle_detected:  # If either front sensor reading exceeds threshold
-        obstacle_distance = 0.2  # Approximate distance (meters) to assumed obstacle
+        obstacle_distance = 20  # Approximate distance (centimeters) to assumed obstacle
         obstacle_x = x + obstacle_distance * math.cos(phi)  # Estimate obstacle x in world frame
         obstacle_y = y + obstacle_distance * math.sin(phi)  # Estimate obstacle y in world frame
 
@@ -939,13 +939,9 @@ while True:  # Main control loop, runs indefinitely
     # ----------- Act (Send motor commands) -----------
     motorA.forward(leftSpeed)
     motorB.forward(rightSpeed)
-    if 'leftSpeed' in locals() and 'rightSpeed' in locals():  # Ensure speeds have been computed
-        motor_cmd = f"MOTOR:{leftSpeed:.4f},{rightSpeed:.4f}\n"  # Format motor command string
 
-        # Debug output at a reduced frequency (every 0.1 seconds)
-        if current_waypoint_index < len(waypoints) and int(current_time * 10) % 10 == 0:
-            print(f"Target: ({waypoints[current_waypoint_index][0]:.3f}, {waypoints[current_waypoint_index][1]:.3f})")
-            print(f"Current: ({x:.3f}, {y:.3f}) | Speeds: L={leftSpeed:.3f}, R={rightSpeed:.3f}")
-
-    time.sleep(0.02)  # Sleep for 0.02 seconds to maintain loop timing
+    # Debug output at a reduced frequency (every 0.1 seconds)
+    if current_waypoint_index < len(waypoints) and int(current_time * 10) % 10 == 0:
+        print(f"Target: ({waypoints[current_waypoint_index][0]:.3f}, {waypoints[current_waypoint_index][1]:.3f})")
+        print(f"Current: ({x:.3f}, {y:.3f}) | Speeds: L={leftSpeed:.3f}, R={rightSpeed:.3f}")
 
