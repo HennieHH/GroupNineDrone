@@ -9,7 +9,7 @@ from Motor_control_encoders import MotorController
 encoderA_L = Pin(18, Pin.IN)
 encoderB_L = Pin(19, Pin.IN)
 
-encoderA_R = Pin(22, Pin.IN)
+encoderA_R = Pin(17, Pin.IN)
 encoderB_R = Pin(23, Pin.IN)
 
 i2c = I2C(0, scl=Pin(33), sda=Pin(25))
@@ -21,17 +21,17 @@ distance_buffer = []
 ToF_weights = [0.393, 0.239, 0.146, 0.089, 0.055, 0.034, 0.020, 0.012, 0.007, 0.004]
 total_ToF_weight = sum(ToF_weights)
 
-line_sensor_pins = [27, 26, 25, 33, 32]
+line_sensor_pins = [36, 39, 34, 35, 32]
 weights = [0, 1000, 2000, 3000, 4000]
 min_vals = [1349, 1407, 1563, 1083, 810]
 max_vals = [2143, 2274, 2559, 1892, 1454]
 
 # Pin configuration for motors (adjust these to match your wiring)
-IN1_PIN_A = 26  # GPIO26 to L298N IN1
-IN2_PIN_A = 27  # GPIO27 to L298N IN2
+IN1_PIN_A = 13  # left motor
+IN2_PIN_A = 14
 
-IN1_PIN_B = 14
-IN2_PIN_B = 12
+IN1_PIN_B = 4 #right motor
+IN2_PIN_B = 16
 
 # Create motor controller instance
 motorA = MotorController(IN1_PIN_A, IN2_PIN_A)
@@ -287,7 +287,7 @@ def world_to_grid(x, y):
     """
 
 
-def correct_position_on_line(x, y, robot_time, last_snap_time):
+def correct_position_on_line(x, y, robot_time, last_snap_time, snap_cooldown=1):
     horizontal_rows = {2, 5, 7, 9, 12}  # Set of rows considered “lines” for snapping y
     vertical_cols = {0, 8, 16}  # Set of columns considered “lines” for snapping x
 
