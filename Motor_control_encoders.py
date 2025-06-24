@@ -3,7 +3,7 @@ import time
 
 
 class MotorController:
-    def __init__(self, in1_pin, in2_pin, freq=1000, min_speed=30):
+    def __init__(self, in1_pin, in2_pin, freq=50, min_speed=50):
         """
         Initialize L298N motor controller without enable pin
 
@@ -28,7 +28,7 @@ class MotorController:
         self.current_speed = 0
         print("Motor stopped")
 
-    def forward(self, speed=80):
+    def forward(self, speed=100):
         """
         Rotate motor forward at specified speed percentage
 
@@ -39,8 +39,8 @@ class MotorController:
         if speed <= 0:
             self.stop()
             return
-        elif speed > 80:
-            speed = 80
+        elif speed > 100:
+            speed = 100
 
         # Apply minimum speed threshold
         if speed < self.min_speed:
@@ -61,8 +61,8 @@ class MotorController:
 print("Starting motor test in 2 seconds...")
 time.sleep(2)
 
-motora = MotorController(21, 22)
-motorb = MotorController(14, 13)
+motora = MotorController(22, 21)
+motorb = MotorController(13, 14)
 
 print("Testing motor A at 30%")
 motora.forward(40)
@@ -73,10 +73,11 @@ motorb.forward(40)
 time.sleep(3)
 
 print("Increasing both motors")
-motora.forward(70)
-motorb.forward(70)
+motora.forward(50)
+motorb.forward(50)
 time.sleep(3)
 
 print("Stopping motors")
 motora.stop()
 motorb.stop()
+
