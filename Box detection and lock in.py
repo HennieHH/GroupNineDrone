@@ -57,6 +57,20 @@ class IR_Magnet:
         return False
 
 '''''
+# NORMAL OPERATION =
+
+detector = IR_Magnet(goal_reached=False) # This is a way to import the class 
+
+while True:
+    detector.obstacle_detection() # calling the function for checking the ir sensor and activating the magnet 
+
+    detector.set_goal_reached(False) # Used to set goal reached, turns off the Magnet for 10 seconds 
+
+    time.sleep(0.1)
+
+
+# FOR BUTTON + 
+
 # Initialize detector + button
 detector = IR_Magnet(goal_reached=False) # This is a way to import the class 
 button = Pin(34, Pin.IN, Pin.PULL_DOWN)  # Button to GND, GPIO 15 with pull-down # Test code for Goals reached statments 
