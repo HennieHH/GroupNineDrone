@@ -1,4 +1,4 @@
-# -------------------------import--------------------
+ # -------------------------import--------------------
 from machine import I2C, Pin, ADC, PWM  # Import Pin and UART classes from the machine module for hardware control
 import time  # Import time module for sleep and time tracking
 import heapq  # Import heapq module for priority queue in Dijkstra’s algorithm
@@ -27,11 +27,11 @@ min_vals = [1349, 1407, 1563, 1083, 810]
 max_vals = [2143, 2274, 2559, 1892, 1454]
 
 # Pin configuration for motors (adjust these to match your wiring)
-IN1_PIN_A = 13  # left motor
-IN2_PIN_A = 14
+IN1_PIN_A = 14  # left motor
+IN2_PIN_A = 13
 
-IN1_PIN_B = 4 #right motor
-IN2_PIN_B = 16
+IN1_PIN_B = 21 #right motor
+IN2_PIN_B = 22
 
 # Create motor controller instance
 motorA = MotorController(IN1_PIN_A, IN2_PIN_A)
@@ -436,7 +436,7 @@ filtered_ToF_distance = 0
 
 # Pathfinding target positions
 start_position = (0, 0)  # Start world coordinates for pathfinding
-goal_position = (-0.463393, 0.330393)  # Goal world coordinates for pathfinding
+goal_position = (1.490000, 1.190000)  # Goal world coordinates for pathfinding
 waypoint_reached_threshold = 0.05  # Distance threshold (meters) to consider waypoint reached
 
 # PID control variables

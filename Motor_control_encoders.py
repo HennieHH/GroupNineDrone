@@ -61,14 +61,14 @@ class MotorController:
 print("Starting motor test in 2 seconds...")
 time.sleep(2)
 
-motora = MotorController(4, 16)
-motorb = MotorController(12, 14)
+motora = MotorController(21, 22)
+motorb = MotorController(14, 13)
 
 print("Testing motor A at 30%")
 motora.forward(40)
 time.sleep(3)
 
-print("Testing motor B at 30%")
+print("Testing motor B a t 30%")
 motorb.forward(40)
 time.sleep(3)
 
