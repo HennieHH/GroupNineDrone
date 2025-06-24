@@ -46,7 +46,8 @@ class IR_Magnet:
                 self.detection_start = None
                 self.triggered = False
                 self.clear_count = 0
-                print("No object detected")
+                self.magnet.off()  # Add this line
+                print("No object detected - Magnet OFF")
 
         if self.goal_reached and not self.drop_active:
             self.magnet.off()
