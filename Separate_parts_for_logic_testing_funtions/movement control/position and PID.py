@@ -75,7 +75,7 @@ def map_pid_to_percent(output, max_pid=6, min_percent=30, max_percent=80):
 
 # xd, yd = 0.0765, 0.23
 MAX_SPEED = 100
-pulses_per_turn = 1939
+pulses_per_turn = 960
 delta_t = 0.16
 encoderValues = [1939, 1939]
 oldEncoderValues = [0, 0]
