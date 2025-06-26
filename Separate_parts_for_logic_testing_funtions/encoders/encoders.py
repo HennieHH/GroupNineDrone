@@ -6,18 +6,20 @@ class EncoderTester:
     def __init__(self):
         # Motor pin setup (same as your main code)
         self.motors = {
-            'fl': {'p1': PWM(Pin(22), freq=50), 'p2': PWM(Pin(21), freq=50)}
+            'fl': {'p1': PWM(Pin(22), freq=50), 'p2': PWM(Pin(21), freq=50)},
+            'fr': {'p1': PWM(Pin(14), freq=50), 'p2': PWM(Pin(13), freq=50)}
 
         }
 
         # Encoder pin setup (same as your main code)
         self.encoders = {
-            'fl': {'a': Pin(17, Pin.IN, Pin.PULL_UP), 'b': Pin(23, Pin.IN, Pin.PULL_UP)},
+            'fl': {'a': Pin(19, Pin.IN, Pin.PULL_UP), 'b': Pin(18, Pin.IN, Pin.PULL_UP)},
+            'fr': {'a': Pin(17, Pin.IN, Pin.PULL_UP), 'b': Pin(23, Pin.IN, Pin.PULL_UP)}
 
         }
 
         # Tick counters
-        self.ticks = {'fl': 0}
+        self.ticks = {'fl': 0, 'fr': 0}
 
         self.setup_encoders()
         self.stop_all()
