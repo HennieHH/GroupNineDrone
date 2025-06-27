@@ -553,7 +553,7 @@ try:
 
         set_motor_speed(1, leftSpeed)
         set_motor_speed(2, rightSpeed)
-
+        time.sleep(delta_t)
 except KeyboardInterrupt:
     print("\nStopping motors...")
     stop_motors()
