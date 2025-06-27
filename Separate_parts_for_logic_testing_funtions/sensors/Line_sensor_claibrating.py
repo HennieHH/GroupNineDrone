@@ -1,7 +1,7 @@
 from machine import ADC, Pin
 from time import sleep
 
-sensor_pins = [36, 39, 34, 35, 32]
+sensor_pins = [32, 35, 34, 39, 36]
 sensors = []
 
 for pin in sensor_pins:
@@ -9,8 +9,8 @@ for pin in sensor_pins:
     adc.atten(ADC.ATTN_11DB)
     sensors.append(adc)
 
-min_vals = [1349, 1350, 1563, 1183, 1000]
-max_vals = [1943, 2274, 2559, 1892, 1454]
+min_vals = [1300, 1300, 1600, 1160, 1000]
+max_vals = [3060, 3440, 3650, 2720, 2060]
 
 def normalize(val, min_val, max_val):
     if max_val - min_val == 0:
