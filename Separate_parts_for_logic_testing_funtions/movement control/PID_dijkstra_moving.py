@@ -416,7 +416,7 @@ try:
         u, w = get_robot_speeds(wl, wr, R, D)
         x, y, phi = get_robot_pose(u, w, x, y, phi, delta_t)
         oldEncoderValues = encoderValues
-
+        print("encoder1:",encoderValues[0], "encoder2:",encoderValues[1])
 #---waypoints_and_PID----
         if len(waypoints) == 0:  # If no waypoints exist
             print("No valid path found!")
