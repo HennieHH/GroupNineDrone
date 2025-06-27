@@ -2,7 +2,7 @@ import time
 from machine import Pin, PWM, ADC
 
 #---line_sensor----
-sensor_pins = [36, 39, 34, 35, 32]
+sensor_pins = [32, 35, 34, 39, 36]
 line_sensors = []
 
 for pin in sensor_pins:
@@ -10,8 +10,8 @@ for pin in sensor_pins:
     adc.atten(ADC.ATTN_11DB)
     line_sensors.append(adc)
 
-min_vals = [1349, 1350, 1563, 1183, 1000]
-max_vals = [1943, 2274, 2559, 1892, 1454]
+min_vals = [1300, 1300, 1600, 1160, 1000]
+max_vals = [3060, 3440, 3650, 2720, 2060]
 
 #-----motors----
 # Motor 1 setup (left motor)
