@@ -2,8 +2,9 @@ import heapq
 import math
 import time
 from machine import Pin, PWM, ADC
-#--------------initialization---------------
-#---line_sensor----
+
+# --------------initialization---------------
+# ---line_sensor----
 sensor_pins = [32, 35, 34, 39, 36]
 line_sensors = []
 
@@ -14,7 +15,7 @@ for pin in sensor_pins:
 
 min_vals = [1300, 1300, 1600, 1160, 1000]
 max_vals = [3060, 3440, 3650, 2720, 2060]
-#-----motors----
+# -----motors----
 # Motor 1 setup (left motor)
 motor1_p1 = PWM(Pin(22), freq=100)
 motor1_p2 = PWM(Pin(21), freq=100)
@@ -22,7 +23,7 @@ motor1_p2 = PWM(Pin(21), freq=100)
 # Motor 2 setup (right motor)
 motor2_p1 = PWM(Pin(14), freq=100)
 motor2_p2 = PWM(Pin(13), freq=100)
-#---encoder----
+# ---encoder----
 # Encoder 1 setup (left encoder)
 encoder1_a = Pin(19, Pin.IN, Pin.PULL_UP)
 encoder1_b = Pin(18, Pin.IN, Pin.PULL_UP)
@@ -31,7 +32,8 @@ encoder1_b = Pin(18, Pin.IN, Pin.PULL_UP)
 encoder2_a = Pin(17, Pin.IN, Pin.PULL_UP)
 encoder2_b = Pin(23, Pin.IN, Pin.PULL_UP)
 
-#------------encoders-----------------
+
+# ------------encoders-----------------
 def encoder1_interrupt(pin):
     global ticks1
     if encoder1_b.value():
@@ -52,7 +54,8 @@ def encoder2_interrupt(pin):
 encoder1_a.irq(trigger=Pin.IRQ_RISING, handler=encoder1_interrupt)
 encoder2_a.irq(trigger=Pin.IRQ_RISING, handler=encoder2_interrupt)
 
-#------------motors----------
+
+# ------------motors----------
 def set_motor_speed(motor, speed):
     """Set motor speed: motor 1 or 2, speed -100 to 100"""
     speed = max(-100, min(100, speed))
@@ -89,12 +92,13 @@ def stop_motors():
     rightSpeed = 0
     return leftSpeed, rightSpeed
 
-#-------------------grid--------------
+
+# -------------------grid--------------
 def create_grid():
     return [
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # Row 0: mixed free and blocked cells
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # Row 1: same pattern as row 0
-        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 2: all free cells
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 2: all free cells
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 3: obstacles around a central corridor
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 4: same as row 3
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 5: obstacles then open corridor
@@ -105,7 +109,8 @@ def create_grid():
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 10: same as row 8
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 11: same as row 10
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 12: all free
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0], # Row 13: mostly blocked with some free at col 10, 12, 14, 16
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0],
+        # Row 13: mostly blocked with some free at col 10, 12, 14, 16
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0]  # Row 14: same as row 13
     ]
 
@@ -136,7 +141,8 @@ def create_costs():
         A list of (row, col) tuples representing the sequence of grid cells from start to goal (inclusive). If no path is found, returns a list containing only the start cell.
     """
 
-#----------------dijkstra-----------------
+
+# ----------------dijkstra-----------------
 def dijkstra(grid, costs, start, goal):
     rows, cols = len(grid), len(grid[0])  # Determine grid dimensions
     visited = set()  # Set to track visited cells
@@ -193,7 +199,7 @@ def grid_to_world(row, col):
         0: {0: 0.000000, 2: 0.150000, 4: 0.300000, 6: 0.459000},
         1: {0: 0.000000, 2: 0.153000, 4: 0.306000, 6: 0.459000},
         2: {
-            0: 0.000000, 1: -0.076500, 2: -0.153000, 3: -0.229500, 4:-0.306000,
+            0: 0.000000, 1: -0.076500, 2: -0.153000, 3: -0.229500, 4: -0.306000,
             5: -0.382500, 6: -0.455000, 7: -0.604000, 8: -0.745000, 9: -0.838125,
             10: -0.931250, 11: -1.024375, 12: -1.117500, 13: -1.210625,
             14: -1.303750, 15: -1.396875, 16: -1.490000
@@ -223,6 +229,8 @@ def grid_to_world(row, col):
     x = col * dx_per_col
     y = manual_ys.get(row, row * 0.085)  # fallback y if missing
     return (x, y)
+
+
 # -------------------------(world to grid)------------
 
 """
@@ -288,7 +296,8 @@ def world_to_grid(x, y):
     row = min(manual_ys, key=lambda r: abs(y - manual_ys[r]))
     return (row, col)
 
-#-----------------waypoints---------------------------
+
+# -----------------waypoints---------------------------
 
 def generate_path_waypoints(start_pos, goal_pos, custom_grid=None):
     grid = custom_grid if custom_grid else create_grid()  # Use custom grid if provided, else default
@@ -299,6 +308,7 @@ def generate_path_waypoints(start_pos, goal_pos, custom_grid=None):
     print(path)  # Debug: print list of (row, col) cells
     return [grid_to_world(*step) for step in path]  # Convert each grid step back to world coords
 
+
 def update_current_waypoint():
     global current_waypoint_index  # Use and update global waypoint index
     current_waypoint_index += 1  # Advance to next waypoint index
@@ -307,12 +317,14 @@ def update_current_waypoint():
         return False  # Return False to signal no more waypoints
     return True  # Return True to indicate more waypoints remain
 
-#---function_line_sensor------------
+
+# ---function_line_sensor------------
 def normalize(val, min_val, max_val):
     if max_val - min_val == 0:
         return 0
     y = (val - min_val) * 1000 // (max_val - min_val)
     return max(0, min(1000, y))
+
 
 def read_all_data(line_sensors):
     """
@@ -332,21 +344,22 @@ def read_all_data(line_sensors):
         'normalized': norm,
     }
 
+
 def line_following_control(normalized_values, force_follow=False):
     global line_following_state, line_counter  # Use and update global state variables
 
     # Determine line visibility based on thresholded sensor readings
-    line_far_left   = normalized_values[0] > 900    # Sensor 1 (links)
-    line_left       = normalized_values[1] > 900 # Sensor 2 (links-midden)
-    line_center     = normalized_values[2] > 900 # Sensor 3 (midden)
-    line_right      = normalized_values[3] > 900 # Sensor 4 (rechts-midden)
-    line_far_right  = normalized_values[4] > 900 # Sensor 5 (rechts)
+    line_far_left = normalized_values[0] > 900  # Sensor 1 (links)
+    line_left = normalized_values[1] > 900  # Sensor 2 (links-midden)
+    line_center = normalized_values[2] > 900  # Sensor 3 (midden)
+    line_right = normalized_values[3] > 900  # Sensor 4 (rechts-midden)
+    line_far_right = normalized_values[4] > 900  # Sensor 5 (rechts)
     # True if front-center sensor off but sides detect line
     centered_on_line = (  # Determine if robot is centered on a line using ground sensors
             line_left and line_center and line_right
     )
     # Define a stronger base speed for line following (half of max)
-    base_speed = MAX_SPEED * 0.8
+    base_speed = MAX_SPEED * 0.7
 
     # If forced to follow or robot is centered, reset to forward state
     if force_follow or centered_on_line:
@@ -394,7 +407,9 @@ def line_following_control(normalized_values, force_follow=False):
         rightSpeed = 0
     line_counter += 1  # Increment counter each call
     return leftSpeed, rightSpeed  # Return computed motor speeds
-#-------------------pose------------
+
+
+# -------------------pose------------
 
 def get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t):
     ang_diff_l = 2 * math.pi * (encoderValues[0] - oldEncoderValues[0]) / pulses_per_turn
@@ -403,10 +418,12 @@ def get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t):
     wr = ang_diff_r / delta_t
     return wl, wr
 
+
 def get_robot_speeds(wl, wr, R, D):
     u = R / 2.0 * (wr + wl)
     w = R / D * (wr - wl)
     return u, w
+
 
 def get_robot_pose(u, w, x, y, phi, delta_t):
     delta_phi = w * delta_t
@@ -421,6 +438,7 @@ def get_robot_pose(u, w, x, y, phi, delta_t):
     y += delta_y
     return x, y, phi
 
+
 # -------------------------- PID Control --------------------------
 
 def get_pose_error(xd, yd, x, y, phi):
@@ -431,6 +449,7 @@ def get_pose_error(xd, yd, x, y, phi):
     phi_err = math.atan2(math.sin(phi_d - phi), math.cos(phi_d - phi))
     return dist_err, phi_err
 
+
 def pid_controller(e, e_prev, e_acc, delta_t, kp=2.0, kd=0.1, ki=0.00):
     P = kp * e
     I = e_acc + ki * e * delta_t
@@ -439,6 +458,7 @@ def pid_controller(e, e_prev, e_acc, delta_t, kp=2.0, kd=0.1, ki=0.00):
     e_prev = e
     e_acc = I
     return output, e_prev, e_acc
+
 
 def wheel_speed_commands(u_d, w_d, d, r):
     wr_d = (2 * u_d + d * w_d) / (2 * r)
@@ -458,6 +478,7 @@ def wheel_speed_commands(u_d, w_d, d, r):
 
     return wl_d, wr_d
 
+
 # -------------------- PID to Percent --------------------
 
 def map_pid_to_percent(output, max_pid=6, min_percent=30, max_percent=80):
@@ -465,13 +486,14 @@ def map_pid_to_percent(output, max_pid=6, min_percent=30, max_percent=80):
     percent = ((output + max_pid) / (2 * max_pid)) * (max_percent - min_percent) + min_percent
     return percent
 
-#---------------parameters-------------
+
+# ---------------parameters-------------
 
 waypoints = []  # List to hold computed world-coordinate waypoints
 waypoints_generated = False  # Flag indicating whether waypoints have been generated
 current_waypoint_index = 0  # Index of the current waypoint being pursued
 x, y = 0, 0  # Initialize robot’s current world x, y position
-phi = math.pi/2  # Initialize robot’s heading (radians)
+phi = math.pi / 2  # Initialize robot’s heading (radians)
 start_position = (0, 0)  # Start world coordinates for pathfinding
 goal_position = (-1.490000, 1.190000)  # Goal world coordinates for pathfinding
 waypoint_reached_threshold = 0.05  # Distance threshold (meters) to consider waypoint reached
@@ -490,7 +512,7 @@ oldEncoderValues = [0, 0]
 
 R = 0.0336
 D = 0.097
-u_d = 0
+u_d = 50
 
 e_prev = 0
 e_acc = 0
@@ -498,11 +520,11 @@ e_acc = 0
 line_following_state = 'forward'  # Current state of line-following state machine
 line_counter = 0  # Counter used in turn states to time transitions
 LINE_COUNTER_MAX = 5  # Maximum count before returning to forward state
-#-----------------loop----------------
+# -----------------loop----------------
 try:
     while True:
         current_time = time.time()
-        #------waypoints----------
+        # ------waypoints----------
         if not waypoints_generated:  # If waypoints have not yet been generated
             waypoints = generate_path_waypoints(start_position, goal_position)  # Compute initial path
             waypoints_generated = True  # Set flag to indicate waypoints are generated
@@ -511,26 +533,26 @@ try:
             for i, wp in enumerate(waypoints):  # Print each waypoint for debugging
                 print(f"  {i}: {wp}")
 
-#---line_sensor_reading
+        # ---line_sensor_reading
         line_data = read_all_data(line_sensors)
         line_norm = line_data['normalized']
         norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
-        print(f"{norm_str}")
-#---position---
+        # print(f"{norm_str}")
+        # ---position---
         encoderValues[0] = ticks1
         encoderValues[1] = ticks2
         wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
         u, w = get_robot_speeds(wl, wr, R, D)
         x, y, phi = get_robot_pose(u, w, x, y, phi, delta_t)
-        oldEncoderValues = encoderValues
-        print("encoder1:",encoderValues[0], "encoder2:",encoderValues[1])
-#---waypoints_and_PID----
+        oldEncoderValues = encoderValues[:]
+        print("encoder1:", encoderValues[0], "encoder2:", encoderValues[1])
+        # ---waypoints_and_PID----
         if len(waypoints) == 0:  # If no waypoints exist
             print("No valid path found!")
             leftSpeed, rightSpeed = stop_motors()
 
         elif current_waypoint_index < len(waypoints):  # If there are still waypoints to pursue
-        # Get current target waypoint
+            # Get current target waypoint
             xd, yd = waypoints[current_waypoint_index]  # Extract x, y of current waypoint
             position_err, orientation_err = get_pose_error(xd, yd, x, y, phi)
 
@@ -538,7 +560,7 @@ try:
                 print(f"Waypoint {current_waypoint_index + 1} reached!")
                 if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
                     leftSpeed, rightSpeed = stop_motors()
-            if orientation_err < 1.0:
+            if abs(orientation_err) < 1.0:
                 w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
                 wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
 
@@ -550,9 +572,11 @@ try:
         else:
             leftSpeed, rightSpeed = stop_motors()
 
-
         set_motor_speed(1, leftSpeed)
         set_motor_speed(2, rightSpeed)
+
+        print("hoekfout", orientation_err)
+        print(f"x:{x}, y:{y}, phi{phi}")
         time.sleep(delta_t)
 except KeyboardInterrupt:
     print("\nStopping motors...")
