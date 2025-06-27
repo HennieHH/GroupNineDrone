@@ -2,8 +2,8 @@ from machine import I2C, Pin
 import VL53L0X as VL
 import time
 
-# Initialize I2C (SDA=21, SCL=22)
-i2c = I2C(0, scl=Pin(22), sda=Pin(21))
+# Initialize I2C (SCL = 25, SDA = 33)
+i2c = I2C(0, scl=Pin(25), sda=Pin(33))
 
 # Initialize VL53L0X sensor
 sensor = VL.VL53L0X(i2c)
