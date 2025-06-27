@@ -3,6 +3,17 @@ import math
 import time
 from machine import Pin, PWM, ADC
 #--------------initialization---------------
+#---line_sensor----
+sensor_pins = [32, 35, 34, 39, 36]
+line_sensors = []
+
+for pin in sensor_pins:
+    adc = ADC(Pin(pin))
+    adc.atten(ADC.ATTN_11DB)
+    line_sensors.append(adc)
+
+min_vals = [1300, 1300, 1600, 1160, 1000]
+max_vals = [3060, 3440, 3650, 2720, 2060]
 #-----motors----
 # Motor 1 setup (left motor)
 motor1_p1 = PWM(Pin(22), freq=100)
@@ -296,6 +307,93 @@ def update_current_waypoint():
         return False  # Return False to signal no more waypoints
     return True  # Return True to indicate more waypoints remain
 
+#---function_line_sensor------------
+def normalize(val, min_val, max_val):
+    if max_val - min_val == 0:
+        return 0
+    y = (val - min_val) * 1000 // (max_val - min_val)
+    return max(0, min(1000, y))
+
+def read_all_data(line_sensors):
+    """
+    Read data from all sensors, compute normalized readings, and calculate line position.
+    Returns a dict with:
+      - raw: list of raw ADC values
+      - normalized: list of inverted normalized values (black line gives higher values)
+      - position: weighted average position (0 = leftmost, 4000 = rightmost)
+    """
+    # Read raw sensor data
+    raw = [s.read() for s in line_sensors]
+    # Normalize and invert readings (line is dark, so invert to get higher values)
+    norm = [1000 - normalize(raw[i], min_vals[i], max_vals[i]) for i in range(len(line_sensors))]
+
+    return {
+        'raw': raw,
+        'normalized': norm,
+    }
+
+def line_following_control(normalized_values, force_follow=False):
+    global line_following_state, line_counter  # Use and update global state variables
+
+    # Determine line visibility based on thresholded sensor readings
+    line_far_left   = normalized_values[0] > 900    # Sensor 1 (links)
+    line_left       = normalized_values[1] > 900 # Sensor 2 (links-midden)
+    line_center     = normalized_values[2] > 900 # Sensor 3 (midden)
+    line_right      = normalized_values[3] > 900 # Sensor 4 (rechts-midden)
+    line_far_right  = normalized_values[4] > 900 # Sensor 5 (rechts)
+    # True if front-center sensor off but sides detect line
+    centered_on_line = (  # Determine if robot is centered on a line using ground sensors
+            line_left and line_center and line_right
+    )
+    # Define a stronger base speed for line following (half of max)
+    base_speed = MAX_SPEED * 0.8
+
+    # If forced to follow or robot is centered, reset to forward state
+    if force_follow or centered_on_line:
+        line_following_state = 'forward'  # Set state to drive straight
+        line_counter = 0  # Reset counter for turning durations
+
+    # --- State machine logic ---
+    if line_following_state == 'forward':  # If in forward state
+        leftSpeed = base_speed  # Both wheels at base speed
+        rightSpeed = base_speed
+        if line_right and not line_left:  # If line detected more on right side
+            line_following_state = 'turn_right'  # Switch to turning right state
+            line_counter = 0
+        elif line_left and not line_right:  # If line detected more on left side
+            line_following_state = 'turn_left'  # Switch to turning left state
+            line_counter = 0
+        elif line_far_left and not line_center:
+            line_following_state = 'turn_far_left'
+            line_counter = 0
+        elif line_far_right and not line_center:
+            line_following_state = 'turn_far_right'
+            line_counter = 0
+    elif line_following_state == 'turn_right':  # If in turn right state
+        leftSpeed = 1.0 * base_speed  # Left wheel faster
+        rightSpeed = 0.45 * base_speed  # Right wheel slower
+        if line_counter >= LINE_COUNTER_MAX:  # After a few iterations, return to forward
+            line_following_state = 'forward'
+    elif line_following_state == 'turn_left':  # If in turn left state
+        leftSpeed = 0.45 * base_speed  # Left wheel slower
+        rightSpeed = 1.0 * base_speed  # Right wheel faster
+        if line_counter >= LINE_COUNTER_MAX:  # After enough counts, switch back
+            line_following_state = 'forward'
+    elif line_following_state == 'turn_far_left':
+        leftSpeed = 0.45 * base_speed  # Left wheel slower
+        rightSpeed = 1.1 * base_speed  # Right wheel faster
+        if line_counter >= LINE_COUNTER_MAX:
+            line_following_state = 'forward'
+    elif line_following_state == 'turn_far_right':
+        leftSpeed = 1.1 * base_speed
+        rightSpeed = 0.45 * base_speed
+        if line_counter >= LINE_COUNTER_MAX:
+            line_following_state = 'forward'
+    else:
+        leftSpeed = 0
+        rightSpeed = 0
+    line_counter += 1  # Increment counter each call
+    return leftSpeed, rightSpeed  # Return computed motor speeds
 #-------------------pose------------
 
 def get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t):
@@ -397,6 +495,9 @@ u_d = 0
 e_prev = 0
 e_acc = 0
 
+line_following_state = 'forward'  # Current state of line-following state machine
+line_counter = 0  # Counter used in turn states to time transitions
+LINE_COUNTER_MAX = 5  # Maximum count before returning to forward state
 #-----------------loop----------------
 try:
     while True:
@@ -409,6 +510,12 @@ try:
             print("Generated waypoints:")
             for i, wp in enumerate(waypoints):  # Print each waypoint for debugging
                 print(f"  {i}: {wp}")
+
+#---line_sensor_reading
+        line_data = read_all_data(line_sensors)
+        line_norm = line_data['normalized']
+        norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
+        print(f"{norm_str}")
 #---position---
         encoderValues[0] = ticks1
         encoderValues[1] = ticks2
@@ -431,12 +538,14 @@ try:
                 print(f"Waypoint {current_waypoint_index + 1} reached!")
                 if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
                     leftSpeed, rightSpeed = stop_motors()
+            if orientation_err < 1.0:
+                w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
+                wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
 
-            w_d, e_prev, e_acc = pid_controller(orientation_err, e_prev, e_acc, delta_t)
-            wl_d, wr_d = wheel_speed_commands(u_d, w_d, D, R)
-
-            leftSpeed = map_pid_to_percent(wl_d)
-            rightSpeed = map_pid_to_percent(wr_d)
+                leftSpeed = map_pid_to_percent(wl_d)
+                rightSpeed = map_pid_to_percent(wr_d)
+            else:
+                leftSpeed, rightSpeed = line_following_control(line_norm)
 
         else:
             leftSpeed, rightSpeed = stop_motors()
