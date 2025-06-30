@@ -37,7 +37,7 @@ line_following_state = 'forward'  # Current state of line-following state machin
 line_counter = 0  # Counter used in turn states to time transitions
 LINE_COUNTER_MAX = 5  # Maximum count before returning to forward state
 MAX_SPEED = 100
-delta_t = 0.016
+
 waypoints = []  # List to hold computed world-coordinate waypoints
 waypoints_generated = False  # Flag indicating whether waypoints have been generated
 current_waypoint_index = 0  # Index of the current waypoint being pursued
@@ -48,7 +48,6 @@ goal_position = (-1.490000, 1.190000)  # Goal world coordinates for pathfinding
 waypoint_reached_threshold = 0.05  # Distance threshold (meters) to consider waypoint reached
 
 pulses_per_turn = 960
-delta_t = 0.16
 encoderValues = [0, 0]
 oldEncoderValues = [0, 0]
 
@@ -64,6 +63,10 @@ start_time = time.time()
 last_ticks1 = 0
 last_ticks2 = 0
 
+LINE_LOOP_DT   = 0.016   # 16 ms voor lijnvolgen
+POSE_LOOP_DT   = 0.1     # 100 ms voor pose-update
+delta_t  = POSE_LOOP_DT
+last_pose_time = time.ticks_ms()
 
 def create_grid():
     return [
@@ -442,16 +445,19 @@ def get_robot_pose(u, w, x, y, phi, delta_t):
 try:
     while True:
         current_time = time.time()
+        now = time.ticks_ms()
 
         line_data = read_all_data(line_sensors)
         line_norm = line_data['normalized']
         norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
         # print(f"{norm_str}")
 
-        wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
-        u, w = get_robot_speeds(wl, wr, R, D)
-        x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
-
+        if time.ticks_diff(now, last_pose_time) >= POSE_LOOP_DT * 1000:
+            # lees encoders & update x,y,phi
+            wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
+            u, w = get_robot_speeds(wl, wr, R, D)
+            x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
+            last_pose_time = now
         # print(x, y, phi)
 
         if not waypoints_generated:  # If waypoints have not yet been generated
@@ -486,7 +492,7 @@ try:
         last_ticks1 = ticks1
         last_ticks2 = ticks2
 
-        time.sleep(delta_t)
+        time.sleep(LINE_LOOP_DT)
 
 
 except KeyboardInterrupt:
@@ -496,4 +502,5 @@ except KeyboardInterrupt:
     print(f"Motor 1 total ticks: {ticks1}")
     print(f"Motor 2 total ticks: {ticks2}")
     print("Test completed")
+
 
