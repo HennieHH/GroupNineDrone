@@ -38,6 +38,7 @@ line_following_state = 'forward'  # Current state of line-following state machin
 line_counter = 0  # Counter used in turn states to time transitions
 LINE_COUNTER_MAX = 5  # Maximum count before returning to forward state
 MAX_SPEED = 100
+delta_t = 0.016
 
 def encoder1_interrupt(pin):
     global ticks1
@@ -227,6 +228,7 @@ try:
         last_ticks1 = ticks1
         last_ticks2 = ticks2
 
+        time.sleep(delta_t)
 
 except KeyboardInterrupt:
     print("\nStopping motors...")
