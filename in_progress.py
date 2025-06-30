@@ -42,7 +42,7 @@ waypoints = []  # List to hold computed world-coordinate waypoints
 waypoints_generated = False  # Flag indicating whether waypoints have been generated
 current_waypoint_index = 0  # Index of the current waypoint being pursued
 x, y = 0, 0  # Initialize robot’s current world x, y position
-phi = math.pi/2  # Initialize robot’s heading (radians)
+phi = math.pi / 2  # Initialize robot’s heading (radians)
 start_position = (0, 0)  # Start world coordinates for pathfinding
 goal_position = (-1.490000, 1.190000)  # Goal world coordinates for pathfinding
 waypoint_reached_threshold = 0.05  # Distance threshold (meters) to consider waypoint reached
@@ -51,7 +51,7 @@ pulses_per_turn = 960
 encoderValues = [0, 0]
 oldEncoderValues = [0, 0]
 
-x_old, y_old, phi_old = 0.0, 0.0, math.pi/2
+x_old, y_old, phi_old = 0.0, 0.0, math.pi / 2
 R = 0.0336
 D = 0.097
 
@@ -63,16 +63,17 @@ start_time = time.time()
 last_ticks1 = 0
 last_ticks2 = 0
 
-LINE_LOOP_DT   = 0.016   # 16 ms voor lijnvolgen
-POSE_LOOP_DT   = 0.1     # 100 ms voor pose-update
-delta_t  = POSE_LOOP_DT
+LINE_LOOP_DT = 0.016  # 16 ms voor lijnvolgen
+POSE_LOOP_DT = 0.1  # 100 ms voor pose-update
+delta_t = POSE_LOOP_DT
 last_pose_time = time.ticks_ms()
+
 
 def create_grid():
     return [
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # Row 0: mixed free and blocked cells
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # Row 1: same pattern as row 0
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 2: all free cells
+        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 2: all free cells
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 3: obstacles around a central corridor
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 4: same as row 3
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 5: obstacles then open corridor
@@ -442,28 +443,19 @@ def get_robot_pose(u, w, x, y, phi, delta_t):
     return x, y, phi
 
 
+def get_pose_error(xd, yd, x, y, phi):
+    x_err = xd - x
+    y_err = yd - y
+    dist_err = math.sqrt(x_err ** 2 + y_err ** 2)
+    phi_d = math.atan2(y_err, x_err)
+    phi_err = math.atan2(math.sin(phi_d - phi), math.cos(phi_d - phi))
+    return dist_err, phi_err
+
+
 try:
     while True:
         current_time = time.time()
         now = time.ticks_ms()
-
-        line_data = read_all_data(line_sensors)
-        line_norm = line_data['normalized']
-        norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
-        # print(f"{norm_str}")
-
-        if time.ticks_diff(now, last_pose_time) >= POSE_LOOP_DT * 1000:
-            # lees encoders & update x,y,phi
-            encoderValues[0] = ticks1
-            encoderValues[1] = ticks2
-            wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
-            u, w = get_robot_speeds(wl, wr, R, D)
-            x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
-            last_pose_time = now
-            print(x, y)
-            oldEncoderValues = encoderValues[:]
-            x_old, y_old, phi_old = x, y, phi
-        # print(x, y, phi)
 
         if not waypoints_generated:  # If waypoints have not yet been generated
             waypoints = generate_path_waypoints(start_position, goal_position)  # Compute initial path
@@ -480,11 +472,36 @@ try:
         elif current_waypoint_index < len(waypoints):  # If there are still waypoints to pursue
             # Get current target waypoint
             xd, yd = waypoints[current_waypoint_index]  # Extract x, y of current waypoint
+            line_data = read_all_data(line_sensors)
+            line_norm = line_data['normalized']
+            norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
+            # print(f"{norm_str}")
 
-        leftSpeed, rightSpeed = line_following_control(line_norm)
+            if time.ticks_diff(now, last_pose_time) >= POSE_LOOP_DT * 1000:
+                # lees encoders & update x,y,phi
+                encoderValues[0] = ticks1
+                encoderValues[1] = ticks2
+                wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
+                u, w = get_robot_speeds(wl, wr, R, D)
+                x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
+                dist_err, phi_err = get_pose_error(xd, yd, x, y, phi)
+                print(phi_err)
+                if dist_err < waypoint_reached_threshold:
+                    print(f"Waypoint {current_waypoint_index + 1} reached!")
+                    if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
+                        stop_motors()
+                # print(phi_err)
+                last_pose_time = now
+                # print(x, y)
+                oldEncoderValues = encoderValues[:]
+                x_old, y_old, phi_old = x, y, phi
 
-        set_motor_speed(1, leftSpeed)
-        set_motor_speed(2, rightSpeed)
+            # print(x, y, phi)
+
+            leftSpeed, rightSpeed = line_following_control(line_norm)
+
+            set_motor_speed(1, leftSpeed)
+            set_motor_speed(2, rightSpeed)
 
         elapsed = current_time - start_time
 
@@ -492,7 +509,7 @@ try:
         rate1 = (ticks1 - last_ticks1) if elapsed > 0 else 0
         rate2 = (ticks2 - last_ticks2) if elapsed > 0 else 0
 
-        print(f"{elapsed:4.0f}s |    {ticks1:6d}    |    {ticks2:6d}    | {rate1:4.0f}  | {rate2:4.0f}")
+        # print(f"{elapsed:4.0f}s |    {ticks1:6d}    |    {ticks2:6d}    | {rate1:4.0f}  | {rate2:4.0f}")
 
         last_ticks1 = ticks1
         last_ticks2 = ticks2
