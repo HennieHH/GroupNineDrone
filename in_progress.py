@@ -43,6 +43,7 @@ waypoints_generated = False  # Flag indicating whether waypoints have been gener
 current_waypoint_index = 0  # Index of the current waypoint being pursued
 x, y = 0, 0  # Initialize robot’s current world x, y position
 phi = math.pi / 2  # Initialize robot’s heading (radians)
+phi_err = 0
 start_position = (0, 0)  # Start world coordinates for pathfinding
 goal_position = (-1.490000, 1.190000)  # Goal world coordinates for pathfinding
 waypoint_reached_threshold = 0.05  # Distance threshold (meters) to consider waypoint reached
@@ -68,6 +69,7 @@ POSE_LOOP_DT = 0.1  # 100 ms voor pose-update
 delta_t = POSE_LOOP_DT
 last_pose_time = time.ticks_ms()
 
+first_time = False
 
 def create_grid():
     return [
@@ -329,7 +331,7 @@ def read_all_data(line_sensors):
 
 
 def line_following_control(normalized_values, force_follow=False):
-    global line_following_state, line_counter  # Use and update global state variables
+    global line_following_state, line_counter, phi_err  # Use and update global state variables
 
     # Determine line visibility based on thresholded sensor readings
     line_far_left = normalized_values[0] > 900  # Sensor 1 (links)
@@ -342,7 +344,7 @@ def line_following_control(normalized_values, force_follow=False):
             line_left and line_center and line_right
     )
     # Define a stronger base speed for line following (half of max)
-    base_speed = MAX_SPEED * 0.8
+    base_speed = MAX_SPEED * 0.3
 
     # If forced to follow or robot is centered, reset to forward state
     if force_follow or centered_on_line:
@@ -353,7 +355,12 @@ def line_following_control(normalized_values, force_follow=False):
     if line_following_state == 'forward':  # If in forward state
         leftSpeed = base_speed  # Both wheels at base speed
         rightSpeed = base_speed
-        if line_right and not line_left:  # If line detected more on right side
+        if phi_err < -1.5 and not line_center:
+            line_following_state = 'corner_right'
+        elif phi_err > 1.5 and not line_center:
+            line_following_state = 'corner_left'
+
+        elif line_right and not line_left:  # If line detected more on right side
             line_following_state = 'turn_right'  # Switch to turning right state
             line_counter = 0
         elif line_left and not line_right:  # If line detected more on left side
@@ -365,6 +372,18 @@ def line_following_control(normalized_values, force_follow=False):
         elif line_far_right and not line_center:
             line_following_state = 'turn_far_right'
             line_counter = 0
+
+    elif line_following_state == 'corner_right':  # If in corner right state
+        leftSpeed = 1.5 * base_speed  # Left wheel slower
+        rightSpeed = -0.5 * base_speed  # Right wheel faster
+        if line_counter >= 10:  # After a few iterations, return to forward
+            line_following_state = 'forward'
+    elif line_following_state == 'corner_left':  # If in corner left state
+        leftSpeed = -0.5 * base_speed
+        rightSpeed = 1.5 * base_speed
+        if line_counter >= 10:  # After a few iterations, return to forward
+            line_following_state = 'forward'
+
     elif line_following_state == 'turn_right':  # If in turn right state
         leftSpeed = 1.0 * base_speed  # Left wheel faster
         rightSpeed = 0.65 * base_speed  # Right wheel slower
@@ -388,8 +407,9 @@ def line_following_control(normalized_values, force_follow=False):
     else:
         leftSpeed = 0
         rightSpeed = 0
+    print(line_following_state)
     line_counter += 1  # Increment counter each call
-    return leftSpeed, rightSpeed  # Return computed motor speeds
+    return leftSpeed, rightSpeed, phi_err  # Return computed motor speeds
 
 
 # Initialize - stop motors
@@ -485,6 +505,11 @@ try:
                 u, w = get_robot_speeds(wl, wr, R, D)
                 x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
                 dist_err, phi_err = get_pose_error(xd, yd, x, y, phi)
+                if first_time == False:
+                    phi_err = 0
+                    first_time = True
+                oldEncoderValues = encoderValues[:]
+                x_old, y_old, phi_old = x, y, phi
                 print(phi_err)
                 if dist_err < waypoint_reached_threshold:
                     print(f"Waypoint {current_waypoint_index + 1} reached!")
@@ -493,12 +518,11 @@ try:
                 # print(phi_err)
                 last_pose_time = now
                 # print(x, y)
-                oldEncoderValues = encoderValues[:]
-                x_old, y_old, phi_old = x, y, phi
+
 
             # print(x, y, phi)
 
-            leftSpeed, rightSpeed = line_following_control(line_norm)
+            leftSpeed, rightSpeed, phi_err = line_following_control(line_norm)
 
             set_motor_speed(1, leftSpeed)
             set_motor_speed(2, rightSpeed)
@@ -524,3 +548,4 @@ except KeyboardInterrupt:
     print(f"Motor 1 total ticks: {ticks1}")
     print(f"Motor 2 total ticks: {ticks2}")
     print("Test completed")
+
