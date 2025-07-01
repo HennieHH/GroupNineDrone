@@ -328,8 +328,8 @@ def read_all_data(line_sensors):
 
 
 def line_following_control(normalized_values, force_follow=False):
-    global line_following_state, line_counter  # Use and update global state variables
-
+    global line_following_state, line_counter  #Use and update global state variables
+    
     # Determine line visibility based on thresholded sensor readings
     line_far_left = normalized_values[0] > 900  # Sensor 1 (links)
     line_left = normalized_values[1] > 900  # Sensor 2 (links-midden)
@@ -348,11 +348,20 @@ def line_following_control(normalized_values, force_follow=False):
         line_following_state = 'forward'  # Set state to drive straight
         line_counter = 0  # Reset counter for turning durations
 
-    # --- State machine logic ---
+    # --- State machine logic ---            
     if line_following_state == 'forward':  # If in forward state
         leftSpeed = base_speed  # Both wheels at base speed
         rightSpeed = base_speed
-        if line_right and not line_left:  # If line detected more on right side
+        
+        
+        if phi_err < 1 and not line_center:
+            line_following_state = 'corner_right'
+        elif phi_err > 1 and not line_center:
+            line_following_state = 'corner_left'
+    
+    
+    
+        elif line_right and not line_left:  # If line detected more on right side
             line_following_state = 'turn_right'  # Switch to turning right state
             line_counter = 0
         elif line_left and not line_right:  # If line detected more on left side
@@ -364,6 +373,17 @@ def line_following_control(normalized_values, force_follow=False):
         elif line_far_right and not line_center:
             line_following_state = 'turn_far_right'
             line_counter = 0
+            
+            
+    elif line_following_state == 'corner_right':  # If in corner right state
+        leftSpeed = 1.5 * base_speed  # Left wheel slower
+        rightSpeed = -0.5 * base_speed  # Right wheel faster  
+    elif line_following_state == 'corner_left':  # If in corner left state
+        leftSpeed = -0.5 * base_speed
+        rightSpeed = 1.5 * base_speed
+        
+        
+        
     elif line_following_state == 'turn_right':  # If in turn right state
         leftSpeed = 1.0 * base_speed  # Left wheel faster
         rightSpeed = 0.45 * base_speed  # Right wheel slower
@@ -441,6 +461,16 @@ def get_robot_pose(u, w, x, y, phi, delta_t):
     y += delta_y
     return x, y, phi
 
+def get_pose_error(xd, yd, x, y, phi):
+    global phi_err
+    x_err = xd - x  # Compute x error
+    y_err = yd - y  # Compute y error
+    dist_err = math.sqrt(x_err ** 2 + y_err ** 2)  # Euclidean distance error
+    phi_d = math.atan2(y_err, x_err)  # Desired heading angle toward waypoint
+    # Compute shortest angular difference: wrap between -π and π
+    phi_err = math.atan2(math.sin(phi_d - phi), math.cos(phi_d - phi))
+    return dist_err, phi_err  # Return distance and orientation errors
+
 
 try:
     while True:
@@ -492,6 +522,8 @@ try:
         last_ticks1 = ticks1
         last_ticks2 = ticks2
 
+        get_pose_error(xd, yd, x, y, phi)
+        
         time.sleep(LINE_LOOP_DT)
 
 
