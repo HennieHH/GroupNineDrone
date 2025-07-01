@@ -68,8 +68,11 @@ LINE_LOOP_DT = 0.016  # 16 ms voor lijnvolgen
 POSE_LOOP_DT = 0.1  # 100 ms voor pose-update
 delta_t = POSE_LOOP_DT
 last_pose_time = time.ticks_ms()
-
+robot_time = time.time()
 first_time = False
+
+snap_cooldown = 1.0  # Seconds to wait between successive snap corrections
+last_snap_time = 0.0  # Timestamp of last snap
 
 
 def create_grid():
@@ -422,18 +425,9 @@ def line_following_control(normalized_values, force_follow=False):
 # Initialize - stop motors
 stop_motors()
 
-# print("80% Speed Test with Encoders")
-# print("Motor 1: pins 5,4 | Encoder 1: pins 38,39")
-# print("Motor 2: pins 6,7 | Encoder 2: pins 2,42")
-# print()
-
 # Reset counters
 ticks1 = 0
 ticks2 = 0
-
-# print("Starting motors at 80% speed...")
-# print("Time | Motor1_Ticks | Motor2_Ticks | Rate1 | Rate2")
-# print("-" * 50)
 
 start_time = time.time()
 last_ticks1 = 0
@@ -443,31 +437,22 @@ last_ticks2 = 0
 # -------------------- Wheel & Pose Estimation --------------------
 
 def get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t):
-    ang_diff_l = 2 * math.pi * (encoderValues[0] - oldEncoderValues[0]) / pulses_per_turn
-    ang_diff_r = 2 * math.pi * (encoderValues[1] - oldEncoderValues[1]) / pulses_per_turn
-    wl = ang_diff_l / delta_t
-    wr = ang_diff_r / delta_t
-    return wl, wr
+    ang_diff = 2 * math.pi * (encoderValues[0] - oldEncoderValues[0]) / pulses_per_turn
+    w = ang_diff / delta_t
+    return w
 
 
-def get_robot_speeds(wl, wr, R, D):
-    u = R / 2.0 * (wr + wl)
-    w = R / D * (wr - wl)
-    return u, w
+def get_robot_speeds(w, R):
+    u = w * R
+    return u
 
 
-def get_robot_pose(u, w, x, y, phi, delta_t):
-    delta_phi = w * delta_t
-    phi += delta_phi
-    if phi >= math.pi:
-        phi -= 2 * math.pi
-    elif phi < -math.pi:
-        phi += 2 * math.pi
+def get_robot_pose(u, x, y, phi, delta_t):
     delta_x = u * math.cos(phi) * delta_t
     delta_y = u * math.sin(phi) * delta_t
     x += delta_x
     y += delta_y
-    return x, y, phi
+    return x, y
 
 
 def get_pose_error(xd, yd, x, y, phi):
@@ -479,10 +464,38 @@ def get_pose_error(xd, yd, x, y, phi):
     return dist_err, phi_err
 
 
+# ----------snapping--------------
+
+def correct_position_on_line(x, y, last_snap_time, snap_cooldown=1):
+    horizontal_rows = {2, 5, 7, 9, 12}  # Set of rows considered “lines” for snapping y
+    vertical_cols = {0, 8, 16}  # Set of columns considered “lines” for snapping x
+
+    if last_snap_time < snap_cooldown:  # Check if cooldown period has not elapsed
+        return x, y, last_snap_time  # Skip snapping if too soon since last snap
+
+    row, col = world_to_grid(x, y)  # Convert current world coords to nearest grid cell
+    corrected_x, corrected_y = grid_to_world(row, col)  # Compute exact world coords of that cell center
+    snap_x = col in vertical_cols  # Determine if column is a vertical line for snapping x
+    snap_y = row in horizontal_rows  # Determine if row is a horizontal line for snapping y
+    dx = abs(x - corrected_x) if snap_x else float('inf')  # Compute difference in x if snapping possible
+    dy = abs(y - corrected_y) if snap_y else float('inf')  # Compute difference in y if snapping possible
+    if dx < dy:  # If x difference is smaller, snap x
+        print(f"Snapping x from {x:.3f} → {corrected_x:.3f} (col {col})")
+        last_snap_time = 0
+        return corrected_x, y, last_snap_time  # Return snapped x, unchanged y, update snap time
+    elif dy < dx:  # If y difference is smaller, snap y
+        last_snap_time = 0
+        print(f"Snapping y from {y:.3f} → {corrected_y:.3f} (row {row})")
+        return x, corrected_y, last_snap_time  # Return unchanged x, snapped y, update snap time
+    else:
+        return x, y, last_snap_time  # No snapping if differences equal or neither line
+
+
 try:
     while True:
         current_time = time.time()
         now = time.ticks_ms()
+        last_snap_time += 0.02
 
         if not waypoints_generated:  # If waypoints have not yet been generated
             waypoints = generate_path_waypoints(start_position, goal_position)  # Compute initial path
@@ -504,22 +517,30 @@ try:
             norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
             # print(f"{norm_str}")
 
+            centered_on_line = (  # Determine if robot is centered on a line using ground sensors
+                    line_norm[3] > 900
+            )
+
+            if centered_on_line:  # If robot is centered on line, attempt snapping
+                old_x, old_y = x, y  # Save old coordinates for comparison
+                x, y, last_snap_time = correct_position_on_line(x, y, last_snap_time)
+
             if time.ticks_diff(now, last_pose_time) >= POSE_LOOP_DT * 1000:
                 # lees encoders & update x,y,phi
                 encoderValues[0] = ticks1
                 encoderValues[1] = ticks2
                 x_old, y_old, phi_old = x, y, phi
-                print("old", oldEncoderValues, "new", encoderValues)
-                wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
-                u, w = get_robot_speeds(wl, wr, R, D)
-                x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
+                # print("old", oldEncoderValues, "new", encoderValues)
+                w = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
+                u = get_robot_speeds(w, R)
+                x, y = get_robot_pose(u, x_old, y_old, phi_old, delta_t)
                 dist_err, phi_err = get_pose_error(xd, yd, x, y, phi)
                 if first_time == False:
                     phi_err = 0
                     first_time = True
                 oldEncoderValues = encoderValues[:]
 
-                print(phi_err)
+                # print(phi_err)
                 if dist_err < waypoint_reached_threshold:
                     print(f"Waypoint {current_waypoint_index + 1} reached!")
                     ticks1, ticks2 = 0, 0
@@ -528,7 +549,7 @@ try:
                         stop_motors()
                 # print(phi_err)
                 last_pose_time = now
-                # print(x, y)
+                print(x, y)
 
             # print(x, y, phi)
 
