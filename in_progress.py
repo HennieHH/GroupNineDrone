@@ -414,7 +414,7 @@ def line_following_control(normalized_values, force_follow=False):
     else:
         leftSpeed = 0
         rightSpeed = 0
-    print(line_following_state)
+    # print(line_following_state)
     line_counter += 1  # Increment counter each call
     return leftSpeed, rightSpeed, phi_err, phi  # Return computed motor speeds
 
@@ -509,6 +509,7 @@ try:
                 encoderValues[0] = ticks1
                 encoderValues[1] = ticks2
                 x_old, y_old, phi_old = x, y, phi
+                print("old", oldEncoderValues, "new", encoderValues)
                 wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
                 u, w = get_robot_speeds(wl, wr, R, D)
                 x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
@@ -521,6 +522,8 @@ try:
                 print(phi_err)
                 if dist_err < waypoint_reached_threshold:
                     print(f"Waypoint {current_waypoint_index + 1} reached!")
+                    ticks1, ticks2 = 0, 0
+                    oldEncoderValues = [0, 0]
                     if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
                         stop_motors()
                 # print(phi_err)
