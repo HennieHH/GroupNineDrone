@@ -1,6 +1,7 @@
 import time
 from machine import Pin, PWM, ADC
 import heapq
+import math
 
 # initialization
 # ---line_sensor----
@@ -32,30 +33,50 @@ encoder1_b = Pin(18, Pin.IN, Pin.PULL_UP)
 encoder2_a = Pin(17, Pin.IN, Pin.PULL_UP)
 encoder2_b = Pin(23, Pin.IN, Pin.PULL_UP)
 
-# Tick counters
-ticks1 = 0
-ticks2 = 0
-
 line_following_state = 'forward'  # Current state of line-following state machine
 line_counter = 0  # Counter used in turn states to time transitions
 LINE_COUNTER_MAX = 5  # Maximum count before returning to forward state
 MAX_SPEED = 100
-delta_t = 0.016
+
 waypoints = []  # List to hold computed world-coordinate waypoints
 waypoints_generated = False  # Flag indicating whether waypoints have been generated
 current_waypoint_index = 0  # Index of the current waypoint being pursued
 x, y = 0, 0  # Initialize robot’s current world x, y position
-phi = 0  # Initialize robot’s heading (radians)
+phi = math.pi / 2  # Initialize robot’s heading (radians)
+phi_err = 0
 start_position = (0, 0)  # Start world coordinates for pathfinding
 goal_position = (-1.490000, 1.190000)  # Goal world coordinates for pathfinding
 waypoint_reached_threshold = 0.05  # Distance threshold (meters) to consider waypoint reached
+
+pulses_per_turn = 960
+encoderValues = [0, 0]
+oldEncoderValues = [0, 0]
+
+x_old, y_old, phi_old = 0.0, 0.0, math.pi / 2
+R = 0.0336
+D = 0.097
+
+# Reset counters
+ticks1 = 0
+ticks2 = 0
+
+start_time = time.time()
+last_ticks1 = 0
+last_ticks2 = 0
+
+LINE_LOOP_DT = 0.016  # 16 ms voor lijnvolgen
+POSE_LOOP_DT = 0.1  # 100 ms voor pose-update
+delta_t = POSE_LOOP_DT
+last_pose_time = time.ticks_ms()
+
+first_time = False
 
 
 def create_grid():
     return [
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # Row 0: mixed free and blocked cells
         [0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # Row 1: same pattern as row 0
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 2: all free cells
+        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 2: all free cells
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 3: obstacles around a central corridor
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0],  # Row 4: same as row 3
         [0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],  # Row 5: obstacles then open corridor
@@ -311,7 +332,7 @@ def read_all_data(line_sensors):
 
 
 def line_following_control(normalized_values, force_follow=False):
-    global line_following_state, line_counter  # Use and update global state variables
+    global line_following_state, line_counter, phi_err, phi  # Use and update global state variables
 
     # Determine line visibility based on thresholded sensor readings
     line_far_left = normalized_values[0] > 900  # Sensor 1 (links)
@@ -324,7 +345,7 @@ def line_following_control(normalized_values, force_follow=False):
             line_left and line_center and line_right
     )
     # Define a stronger base speed for line following (half of max)
-    base_speed = MAX_SPEED * 0.8
+    base_speed = MAX_SPEED * 0.3
 
     # If forced to follow or robot is centered, reset to forward state
     if force_follow or centered_on_line:
@@ -335,7 +356,14 @@ def line_following_control(normalized_values, force_follow=False):
     if line_following_state == 'forward':  # If in forward state
         leftSpeed = base_speed  # Both wheels at base speed
         rightSpeed = base_speed
-        if line_right and not line_left:  # If line detected more on right side
+        if phi_err < -1.5:
+            line_counter = 0
+            line_following_state = 'corner_right'
+        elif phi_err > 1.5:
+            line_counter = 0
+            line_following_state = 'corner_left'
+
+        elif line_right and not line_left:  # If line detected more on right side
             line_following_state = 'turn_right'  # Switch to turning right state
             line_counter = 0
         elif line_left and not line_right:  # If line detected more on left side
@@ -347,31 +375,48 @@ def line_following_control(normalized_values, force_follow=False):
         elif line_far_right and not line_center:
             line_following_state = 'turn_far_right'
             line_counter = 0
+
+    elif line_following_state == 'corner_right':  # If in corner right state
+        leftSpeed = 1.5 * base_speed  # Left wheel slower
+        rightSpeed = -0.5 * base_speed  # Right wheel faster
+        if line_counter >= 100:  # After a few iterations, return to forward
+            phi_err = 0
+            phi = math.pi  # tweedebocht!
+            line_following_state = 'forward'
+    elif line_following_state == 'corner_left':  # If in corner left state
+        leftSpeed = -0.5 * base_speed
+        rightSpeed = 1.5 * base_speed
+        if line_counter >= 100:  # After a few iterations, return to forward
+            phi_err = 0
+            phi = math.pi
+            line_following_state = 'forward'
+
     elif line_following_state == 'turn_right':  # If in turn right state
         leftSpeed = 1.0 * base_speed  # Left wheel faster
-        rightSpeed = 0.45 * base_speed  # Right wheel slower
+        rightSpeed = 0.65 * base_speed  # Right wheel slower
         if line_counter >= LINE_COUNTER_MAX:  # After a few iterations, return to forward
             line_following_state = 'forward'
     elif line_following_state == 'turn_left':  # If in turn left state
-        leftSpeed = 0.45 * base_speed  # Left wheel slower
+        leftSpeed = 0.65 * base_speed  # Left wheel slower
         rightSpeed = 1.0 * base_speed  # Right wheel faster
         if line_counter >= LINE_COUNTER_MAX:  # After enough counts, switch back
             line_following_state = 'forward'
     elif line_following_state == 'turn_far_left':
-        leftSpeed = 0.45 * base_speed  # Left wheel slower
+        leftSpeed = 0.65 * base_speed  # Left wheel slower
         rightSpeed = 1.1 * base_speed  # Right wheel faster
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
     elif line_following_state == 'turn_far_right':
         leftSpeed = 1.1 * base_speed
-        rightSpeed = 0.45 * base_speed
+        rightSpeed = 0.65 * base_speed
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
     else:
         leftSpeed = 0
         rightSpeed = 0
+    # print(line_following_state)
     line_counter += 1  # Increment counter each call
-    return leftSpeed, rightSpeed  # Return computed motor speeds
+    return leftSpeed, rightSpeed, phi_err, phi  # Return computed motor speeds
 
 
 # Initialize - stop motors
@@ -394,14 +439,50 @@ start_time = time.time()
 last_ticks1 = 0
 last_ticks2 = 0
 
+
+# -------------------- Wheel & Pose Estimation --------------------
+
+def get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t):
+    ang_diff_l = 2 * math.pi * (encoderValues[0] - oldEncoderValues[0]) / pulses_per_turn
+    ang_diff_r = 2 * math.pi * (encoderValues[1] - oldEncoderValues[1]) / pulses_per_turn
+    wl = ang_diff_l / delta_t
+    wr = ang_diff_r / delta_t
+    return wl, wr
+
+
+def get_robot_speeds(wl, wr, R, D):
+    u = R / 2.0 * (wr + wl)
+    w = R / D * (wr - wl)
+    return u, w
+
+
+def get_robot_pose(u, w, x, y, phi, delta_t):
+    delta_phi = w * delta_t
+    phi += delta_phi
+    if phi >= math.pi:
+        phi -= 2 * math.pi
+    elif phi < -math.pi:
+        phi += 2 * math.pi
+    delta_x = u * math.cos(phi) * delta_t
+    delta_y = u * math.sin(phi) * delta_t
+    x += delta_x
+    y += delta_y
+    return x, y, phi
+
+
+def get_pose_error(xd, yd, x, y, phi):
+    x_err = xd - x
+    y_err = yd - y
+    dist_err = math.sqrt(x_err ** 2 + y_err ** 2)
+    phi_d = math.atan2(y_err, x_err)
+    phi_err = math.atan2(math.sin(phi_d - phi), math.cos(phi_d - phi))
+    return dist_err, phi_err
+
+
 try:
     while True:
         current_time = time.time()
-
-        line_data = read_all_data(line_sensors)
-        line_norm = line_data['normalized']
-        norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
-        # print(f"{norm_str}")
+        now = time.ticks_ms()
 
         if not waypoints_generated:  # If waypoints have not yet been generated
             waypoints = generate_path_waypoints(start_position, goal_position)  # Compute initial path
@@ -418,11 +499,43 @@ try:
         elif current_waypoint_index < len(waypoints):  # If there are still waypoints to pursue
             # Get current target waypoint
             xd, yd = waypoints[current_waypoint_index]  # Extract x, y of current waypoint
+            line_data = read_all_data(line_sensors)
+            line_norm = line_data['normalized']
+            norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
+            # print(f"{norm_str}")
 
-        leftSpeed, rightSpeed = line_following_control(line_norm)
+            if time.ticks_diff(now, last_pose_time) >= POSE_LOOP_DT * 1000:
+                # lees encoders & update x,y,phi
+                encoderValues[0] = ticks1
+                encoderValues[1] = ticks2
+                x_old, y_old, phi_old = x, y, phi
+                print("old", oldEncoderValues, "new", encoderValues)
+                wl, wr = get_wheels_speed(encoderValues, oldEncoderValues, pulses_per_turn, delta_t)
+                u, w = get_robot_speeds(wl, wr, R, D)
+                x, y, phi = get_robot_pose(u, w, x_old, y_old, phi_old, delta_t)
+                dist_err, phi_err = get_pose_error(xd, yd, x, y, phi)
+                if first_time == False:
+                    phi_err = 0
+                    first_time = True
+                oldEncoderValues = encoderValues[:]
 
-        set_motor_speed(1, leftSpeed)
-        set_motor_speed(2, rightSpeed)
+                print(phi_err)
+                if dist_err < waypoint_reached_threshold:
+                    print(f"Waypoint {current_waypoint_index + 1} reached!")
+                    ticks1, ticks2 = 0, 0
+                    oldEncoderValues = [0, 0]
+                    if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
+                        stop_motors()
+                # print(phi_err)
+                last_pose_time = now
+                # print(x, y)
+
+            # print(x, y, phi)
+
+            leftSpeed, rightSpeed, phi_err, phi = line_following_control(line_norm)
+
+            set_motor_speed(1, leftSpeed)
+            set_motor_speed(2, rightSpeed)
 
         elapsed = current_time - start_time
 
@@ -435,7 +548,7 @@ try:
         last_ticks1 = ticks1
         last_ticks2 = ticks2
 
-        time.sleep(delta_t)
+        time.sleep(LINE_LOOP_DT)
 
 
 except KeyboardInterrupt:
