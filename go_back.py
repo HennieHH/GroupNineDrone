@@ -393,10 +393,9 @@ def line_following_control(normalized_values, force_follow=False):
                 line_counter = 0
                 line_following_state = 'corner_left'
         elif mission_phase == 'return':
-            if turn_180 == True:
+            if turn_180:
                 line_counter = 0
                 line_following_state = '180'
-                turn_180 = False
             elif phi_err < -1.5:
                 line_counter = 0
                 line_following_state = 'corner_right_back'
@@ -441,6 +440,7 @@ def line_following_control(normalized_values, force_follow=False):
         if line_counter >= 160:  # After a few iterations, return to forward
             phi_err = 0
             phi = -math.pi / 2
+            turn_180 = False
             line_following_state = 'forward'
 
     elif line_following_state == 'corner_right_back':
@@ -636,6 +636,7 @@ try:
                 # time.sleep(2)  # Wait for pickup
                 box_picked_up = True
                 turn_180 = True
+                print(turn_180)
                 print("Box picked up! Planning return journey...")
 
                 # Generate return path
@@ -674,5 +675,4 @@ except KeyboardInterrupt:
     print(f"Motor 1 total ticks: {ticks1}")
     print(f"Motor 2 total ticks: {ticks2}")
     print("Test completed")
-
 
