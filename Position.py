@@ -3,6 +3,7 @@ from machine import Pin, PWM, ADC
 import heapq
 import math
 from test import IR_Magnet
+
 # initialization
 # ---line_sensor----
 sensor_pins = [32, 35, 34, 39, 36]
@@ -361,7 +362,7 @@ def read_all_data(line_sensors):
 
 
 def line_following_control(normalized_values, force_follow=False):
-    global line_following_state, line_counter, phi_err, phi, reset, x, mission_phase, turn_180  # Use and update global state variables
+    global line_following_state, line_counter, phi_err, phi, reset, x, mission_phase, turn_180, y  # Use and update global state variables
 
     # Determine line visibility based on thresholded sensor readings
     line_far_left = normalized_values[0] > 900  # Sensor 1 (links)
@@ -370,9 +371,9 @@ def line_following_control(normalized_values, force_follow=False):
     line_right = normalized_values[3] > 900  # Sensor 4 (rechts-midden)
     line_far_right = normalized_values[4] > 900  # Sensor 5 (rechts)
     # True if front-center sensor off but sides detect line
-#     centered_on_line = (  # Determine if robot is centered on a line using ground sensors
-#             line_left and line_center and line_right
-#     )
+    #     centered_on_line = (  # Determine if robot is centered on a line using ground sensors
+    #             line_left and line_center and line_right
+    #     )
     # Define a stronger base speed for line following (half of max)
     base_speed = MAX_SPEED * 0.23
 
@@ -436,12 +437,14 @@ def line_following_control(normalized_values, force_follow=False):
         leftSpeed = 1.8 * base_speed
         rightSpeed = 0 * base_speed
         print("got to 180 speed setting")
-        if line_counter >= 140:  # After a few iterations, return to forward
+        if line_counter >= 120:  # After a few iterations, return to forward
             line_counter = 0
             phi_err = 0
             phi = -math.pi / 2
             turn_180 = False
             x = -1.49
+            y = 1.190000
+            reset = True
             line_following_state = 'forward'
             print("got to return forward")
     elif line_following_state == 'corner_right_back':
@@ -457,7 +460,7 @@ def line_following_control(normalized_values, force_follow=False):
     elif line_following_state == 'corner_left_back':
         leftSpeed = -0.5 * base_speed
         rightSpeed = 1.5 * base_speed
-        if line_counter >= 52:  # After a few iterations, return to forward
+        if line_counter >= 56:  # After a few iterations, return to forward
             phi_err = 0
             phi = 0
             line_following_state = 'forward'
@@ -486,10 +489,10 @@ def line_following_control(normalized_values, force_follow=False):
         leftSpeed = 0
         rightSpeed = 0
     # print(line_following_state)
-    print(line_counter)
-    #print(turn_180)
+    print(f"line counter :{line_counter} with state : {line_following_state}")
+    # print(turn_180)
     line_counter += 1  # Increment counter each call
-    return leftSpeed, rightSpeed, phi_err, phi, reset, x  # Return computed motor speeds
+    return leftSpeed, rightSpeed, phi_err, phi, reset, x, y  # Return computed motor speeds
 
 
 # Initialize - stop motors
@@ -585,7 +588,7 @@ try:
             line_data = read_all_data(line_sensors)
             line_norm = line_data['normalized']
             norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
-            #print(f"{norm_str}")
+            # print(f"{norm_str}")
 
             centered_on_line = (  # Determine if robot is centered on a line using ground sensors
                     line_norm[3] > 900
@@ -597,6 +600,7 @@ try:
 
             if time.ticks_diff(now, last_pose_time) >= POSE_LOOP_DT * 1000:
                 # lees encoders & update x,y,phi
+                print(f"test1: {phi_err}")
                 encoderValues[0] = ticks1
                 encoderValues[1] = ticks2
                 x_old, y_old, phi_old = x, y, phi
@@ -605,7 +609,12 @@ try:
                 u = get_robot_speeds(w, R)
                 x, y = get_robot_pose(u, x_old, y_old, phi_old, delta_t)
                 if not reset:
+                    print(f"test2: {phi_err}")
+                    print(f"test1: xd: {xd}, yd: {yd}, x:{x}, y: {y}, phi: {phi}")
                     dist_err, phi_err = get_pose_error(xd, yd, x, y, phi)
+                    print(f"test3: {phi_err}")
+                    print(f"test1: xd: {xd}, yd: {yd}, x:{x}, y: {y}, phi: {phi}")
+
                 elif reset:
                     reset = False
 
@@ -623,12 +632,12 @@ try:
                         stop_motors()
                 print(phi_err)
                 last_pose_time = now
-                #print(x, y)
-                #print(xd, yd)
+                # print(x, y)
+                # print(xd, yd)
 
             # print(x, y, phi)
 
-            leftSpeed, rightSpeed, phi_err, phi, reset, x = line_following_control(line_norm)
+            leftSpeed, rightSpeed, phi_err, phi, reset, x, y = line_following_control(line_norm)
 
             if mission_phase == 'pickup' and current_waypoint_index >= len(waypoints):
                 # All pickup waypoints reached - now look for the box
