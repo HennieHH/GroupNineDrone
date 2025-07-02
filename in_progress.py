@@ -75,6 +75,12 @@ snap_cooldown = 1.0  # Seconds to wait between successive snap corrections
 last_snap_time = 0.0  # Timestamp of last snap
 
 reset = False
+box_picked_up = False  # Boolean to track if box is picked up
+mission_phase = 'pickup'  # Track current mission phase: 'pickup' or 'return'
+return_waypoints = []  # List to hold return path waypoints
+turn_180 = False
+
+base_speed = MAX_SPEED * 0.3
 
 
 def create_grid():
@@ -245,12 +251,28 @@ def generate_path_waypoints(start_pos, goal_pos, custom_grid=None):
 
 
 def update_current_waypoint():
-    global current_waypoint_index  # Use and update global waypoint index
-    current_waypoint_index += 1  # Advance to next waypoint index
-    if current_waypoint_index >= len(waypoints):  # If index exceeds number of waypoints
-        print("All waypoints reached! Mission complete.")  # Indicate mission complete
-        return False  # Return False to signal no more waypoints
-    return True  # Return True to indicate more waypoints remain
+    global current_waypoint_index, box_picked_up, mission_phase
+    current_waypoint_index += 1
+
+    if mission_phase == 'return' and current_waypoint_index >= len(waypoints):
+        # Return phase complete - drop the box
+        print("Returned to start! Dropping box...")
+        # YOUR DROP CODE HERE
+        # deactivate_magnet()
+
+        box_picked_up = False
+        print("Mission complete - box delivered!")
+        return False
+
+    if current_waypoint_index >= len(waypoints):
+        if mission_phase == 'pickup':
+            # Keep going forward until IR sensor finds box
+            print("All waypoints reached, searching for box...")
+            return True
+        else:
+            return False
+
+    return True
 
 
 def encoder1_interrupt(pin):
@@ -337,7 +359,7 @@ def read_all_data(line_sensors):
 
 
 def line_following_control(normalized_values, force_follow=False):
-    global line_following_state, line_counter, phi_err, phi, reset, x  # Use and update global state variables
+    global line_following_state, line_counter, phi_err, phi, reset, x, mission_phase, turn_180  # Use and update global state variables
 
     # Determine line visibility based on thresholded sensor readings
     line_far_left = normalized_values[0] > 900  # Sensor 1 (links)
@@ -346,31 +368,39 @@ def line_following_control(normalized_values, force_follow=False):
     line_right = normalized_values[3] > 900  # Sensor 4 (rechts-midden)
     line_far_right = normalized_values[4] > 900  # Sensor 5 (rechts)
     # True if front-center sensor off but sides detect line
-    centered_on_line = (  # Determine if robot is centered on a line using ground sensors
-            line_left and line_center and line_right
-    )
+#     centered_on_line = (  # Determine if robot is centered on a line using ground sensors
+#             line_left and line_center and line_right
+#     )
     # Define a stronger base speed for line following (half of max)
     base_speed = MAX_SPEED * 0.3
 
-    # If forced to follow or robot is centered, reset to forward state
-    if force_follow or centered_on_line:
-        line_following_state = 'forward'  # Set state to drive straight
-        line_counter = 0  # Reset counter for turning durations
-
     # --- State machine logic ---
     if line_following_state == 'forward':  # If in forward state
+        if mission_phase != 'return' or not turn_180:  # Only reset counter if not in middle of 180 turn
+            line_counter = 0
         leftSpeed = base_speed  # Both wheels at base speed
         rightSpeed = base_speed
-        if phi_err < -1.5:
-            line_counter = 0
-            line_following_state = 'corner_right'
-            x = -1.49
-            print("star turning")
-        elif phi_err > 1.5:
-            line_counter = 0
-            line_following_state = 'corner_left'
+        if mission_phase == 'pickup':
+            if phi_err < -1.5:
+                line_counter = 0
+                line_following_state = 'corner_right'
+                x = -1.49
+                print("star turning")
+            elif phi_err > 1.5:
+                line_counter = 0
+                line_following_state = 'corner_left'
+        elif mission_phase == 'return':
+            if turn_180:
+                line_following_state = '180'
+            elif phi_err < -1.5:
+                line_counter = 0
+                line_following_state = 'corner_right_back'
+                print("star turning")
+            elif phi_err > 1.5:
+                line_counter = 0
+                line_following_state = 'corner_left_back'
 
-        elif line_right and not line_left:  # If line detected more on right side
+        if line_right and not line_left:  # If line detected more on right side
             line_following_state = 'turn_right'  # Switch to turning right state
             line_counter = 0
         elif line_left and not line_right:  # If line detected more on left side
@@ -389,7 +419,6 @@ def line_following_control(normalized_values, force_follow=False):
         if line_counter >= 80:  # After a few iterations, return to forward
             phi_err = 0
             phi = math.pi / 2
-
             print("turn complete")
             x = -1.49
             line_following_state = 'forward'
@@ -399,6 +428,35 @@ def line_following_control(normalized_values, force_follow=False):
         if line_counter >= 80:  # After a few iterations, return to forward
             phi_err = 0
             phi = math.pi
+            line_following_state = 'forward'
+
+    elif line_following_state == '180':
+        leftSpeed = 0 * base_speed
+        rightSpeed = 1.5 * base_speed
+        print("got to 180 speed setting")
+        if line_counter >= 160:  # After a few iterations, return to forward
+            line_counter = 0
+            phi_err = 0
+            phi = -math.pi / 2
+            turn_180 = False
+            line_following_state = 'forward'
+            print("got to return forward")
+    elif line_following_state == 'corner_right_back':
+        leftSpeed = 1.5 * base_speed  # Left wheel slower
+        rightSpeed = -0.5 * base_speed  # Right wheel faster
+        if line_counter >= 80:  # After a few iterations, return to forward
+            phi_err = 0
+            phi = -math.pi / 2
+            x = 0
+            print("turn complete")
+            line_following_state = 'forward'
+
+    elif line_following_state == 'corner_left_back':
+        leftSpeed = -0.5 * base_speed
+        rightSpeed = 1.5 * base_speed
+        if line_counter >= 80:  # After a few iterations, return to forward
+            phi_err = 0
+            phi = 0
             line_following_state = 'forward'
 
     elif line_following_state == 'turn_right':  # If in turn right state
@@ -425,6 +483,8 @@ def line_following_control(normalized_values, force_follow=False):
         leftSpeed = 0
         rightSpeed = 0
     # print(line_following_state)
+    print(line_counter)
+    #print(turn_180)
     line_counter += 1  # Increment counter each call
     return leftSpeed, rightSpeed, phi_err, phi, reset, x  # Return computed motor speeds
 
@@ -558,15 +618,39 @@ try:
                     oldEncoderValues = [0, 0]
                     if not update_current_waypoint():  # Advance to next waypoint; if False returned, mission complete
                         stop_motors()
-                # print(phi_err)
+                print(phi_err)
                 last_pose_time = now
-                print(x, y)
-                print(xd, yd)
+                #print(x, y)
+                #print(xd, yd)
 
             # print(x, y, phi)
 
             leftSpeed, rightSpeed, phi_err, phi, reset, x = line_following_control(line_norm)
 
+            if mission_phase == 'pickup' and current_waypoint_index >= len(waypoints):
+                # All pickup waypoints reached - now look for the box
+                # if ir_sensor_detects_box():  # Replace with your actual IR sensor check
+                print("Box detected! Activating magnet...")
+                # YOUR PICKUP CODE HERE
+                # activate_magnet()
+                # time.sleep(2)  # Wait for pickup
+                box_picked_up = True
+                turn_180 = True
+                print(turn_180)
+                print("Box picked up! Planning return journey...")
+
+                # Generate return path
+                current_pos = (x, y)  # Use current position
+                return_waypoints = generate_path_waypoints(current_pos, start_position)
+
+                # Switch to return phase
+                mission_phase = 'return'
+                waypoints = return_waypoints
+                current_waypoint_index = 0
+
+                print("Generated return waypoints:")
+                for i, wp in enumerate(return_waypoints):
+                    print(f"  {i}: {wp}")
             set_motor_speed(1, leftSpeed)
             set_motor_speed(2, rightSpeed)
 
@@ -591,4 +675,6 @@ except KeyboardInterrupt:
     print(f"Motor 1 total ticks: {ticks1}")
     print(f"Motor 2 total ticks: {ticks2}")
     print("Test completed")
+
+
 
