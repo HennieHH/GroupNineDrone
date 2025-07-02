@@ -380,7 +380,10 @@ def line_following_control(normalized_values, force_follow=False):
         line_counter = 0  # Reset counter for turning durations
 
     # --- State machine logic ---
+    # --- State machine logic ---
     if line_following_state == 'forward':  # If in forward state
+        if mission_phase != 'return' or not turn_180:  # Only reset counter if not in middle of 180 turn
+            line_counter = 0
         leftSpeed = base_speed  # Both wheels at base speed
         rightSpeed = base_speed
         if mission_phase == 'pickup':
@@ -394,7 +397,6 @@ def line_following_control(normalized_values, force_follow=False):
                 line_following_state = 'corner_left'
         elif mission_phase == 'return':
             if turn_180:
-                line_counter = 0
                 line_following_state = '180'
             elif phi_err < -1.5:
                 line_counter = 0
@@ -435,14 +437,16 @@ def line_following_control(normalized_values, force_follow=False):
             line_following_state = 'forward'
 
     elif line_following_state == '180':
-        leftSpeed = -0.5 * base_speed
+        leftSpeed = 0 * base_speed
         rightSpeed = 1.5 * base_speed
+        print("got to 180 speed setting")
         if line_counter >= 160:  # After a few iterations, return to forward
+            line_counter = 0
             phi_err = 0
             phi = -math.pi / 2
             turn_180 = False
             line_following_state = 'forward'
-
+            print("got to return forward")
     elif line_following_state == 'corner_right_back':
         leftSpeed = 1.5 * base_speed  # Left wheel slower
         rightSpeed = -0.5 * base_speed  # Right wheel faster
@@ -484,7 +488,8 @@ def line_following_control(normalized_values, force_follow=False):
         leftSpeed = 0
         rightSpeed = 0
     # print(line_following_state)
-    print(line_following_state)
+    print(line_counter)
+    print(turn_180)
     line_counter += 1  # Increment counter each call
     return leftSpeed, rightSpeed, phi_err, phi, reset, x  # Return computed motor speeds
 
@@ -620,8 +625,8 @@ try:
                         stop_motors()
                 # print(phi_err)
                 last_pose_time = now
-                print(x, y)
-                print(xd, yd)
+                #print(x, y)
+                #print(xd, yd)
 
             # print(x, y, phi)
 
@@ -675,4 +680,5 @@ except KeyboardInterrupt:
     print(f"Motor 1 total ticks: {ticks1}")
     print(f"Motor 2 total ticks: {ticks2}")
     print("Test completed")
+
 
