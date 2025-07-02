@@ -418,7 +418,7 @@ def line_following_control(normalized_values, force_follow=False):
     elif line_following_state == 'corner_right':  # If in corner right state
         leftSpeed = 1.5 * base_speed  # Left wheel slower
         rightSpeed = -0.5 * base_speed  # Right wheel faster
-        if line_counter >= 47:  # After a few iterations, return to forward
+        if line_counter >= 50:  # After a few iterations, return to forward
             phi_err = 0
             phi = math.pi / 2
             print("turn complete")
@@ -433,14 +433,15 @@ def line_following_control(normalized_values, force_follow=False):
             line_following_state = 'forward'
 
     elif line_following_state == '180':
-        leftSpeed = 0 * base_speed
-        rightSpeed = 1.5 * base_speed
+        leftSpeed = 1.8 * base_speed
+        rightSpeed = 0 * base_speed
         print("got to 180 speed setting")
-        if line_counter >= 150:  # After a few iterations, return to forward
+        if line_counter >= 140:  # After a few iterations, return to forward
             line_counter = 0
             phi_err = 0
             phi = -math.pi / 2
             turn_180 = False
+            x = -1.49
             line_following_state = 'forward'
             print("got to return forward")
     elif line_following_state == 'corner_right_back':
@@ -456,7 +457,7 @@ def line_following_control(normalized_values, force_follow=False):
     elif line_following_state == 'corner_left_back':
         leftSpeed = -0.5 * base_speed
         rightSpeed = 1.5 * base_speed
-        if line_counter >= 49:  # After a few iterations, return to forward
+        if line_counter >= 52:  # After a few iterations, return to forward
             phi_err = 0
             phi = 0
             line_following_state = 'forward'
