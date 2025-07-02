@@ -374,7 +374,7 @@ def line_following_control(normalized_values, force_follow=False):
 #             line_left and line_center and line_right
 #     )
     # Define a stronger base speed for line following (half of max)
-    base_speed = MAX_SPEED * 0.3
+    base_speed = MAX_SPEED * 0.23
 
     # --- State machine logic ---
     if line_following_state == 'forward':  # If in forward state
@@ -418,7 +418,7 @@ def line_following_control(normalized_values, force_follow=False):
     elif line_following_state == 'corner_right':  # If in corner right state
         leftSpeed = 1.5 * base_speed  # Left wheel slower
         rightSpeed = -0.5 * base_speed  # Right wheel faster
-        if line_counter >= 40:  # After a few iterations, return to forward
+        if line_counter >= 47:  # After a few iterations, return to forward
             phi_err = 0
             phi = math.pi / 2
             print("turn complete")
@@ -436,7 +436,7 @@ def line_following_control(normalized_values, force_follow=False):
         leftSpeed = 0 * base_speed
         rightSpeed = 1.5 * base_speed
         print("got to 180 speed setting")
-        if line_counter >= 140:  # After a few iterations, return to forward
+        if line_counter >= 150:  # After a few iterations, return to forward
             line_counter = 0
             phi_err = 0
             phi = -math.pi / 2
@@ -462,13 +462,13 @@ def line_following_control(normalized_values, force_follow=False):
             line_following_state = 'forward'
 
     elif line_following_state == 'turn_right':  # If in turn right state
-        leftSpeed = 1.1 * base_speed  # Left wheel faster
+        leftSpeed = 1.3 * base_speed  # Left wheel faster
         rightSpeed = 0.65 * base_speed  # Right wheel slower
         if line_counter >= LINE_COUNTER_MAX:  # After a few iterations, return to forward
             line_following_state = 'forward'
     elif line_following_state == 'turn_left':  # If in turn left state
         leftSpeed = 0.65 * base_speed  # Left wheel slower
-        rightSpeed = 1.1 * base_speed  # Right wheel faster
+        rightSpeed = 1.8 * base_speed  # Right wheel faster
         if line_counter >= LINE_COUNTER_MAX:  # After enough counts, switch back
             line_following_state = 'forward'
     elif line_following_state == 'turn_far_left':
@@ -477,7 +477,7 @@ def line_following_control(normalized_values, force_follow=False):
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
     elif line_following_state == 'turn_far_right':
-        leftSpeed = 1.5 * base_speed
+        leftSpeed = 1.0 * base_speed
         rightSpeed = 0.65 * base_speed
         if line_counter >= LINE_COUNTER_MAX:
             line_following_state = 'forward'
@@ -584,7 +584,7 @@ try:
             line_data = read_all_data(line_sensors)
             line_norm = line_data['normalized']
             norm_str = "  ".join(f"N{i + 1}:{line_data['normalized'][i]}" for i in range(len(line_sensors)))
-            # print(f"{norm_str}")
+            #print(f"{norm_str}")
 
             centered_on_line = (  # Determine if robot is centered on a line using ground sensors
                     line_norm[3] > 900
