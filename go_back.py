@@ -368,16 +368,16 @@ def line_following_control(normalized_values, force_follow=False):
     line_right = normalized_values[3] > 900  # Sensor 4 (rechts-midden)
     line_far_right = normalized_values[4] > 900  # Sensor 5 (rechts)
     # True if front-center sensor off but sides detect line
-    centered_on_line = (  # Determine if robot is centered on a line using ground sensors
-            line_left and line_center and line_right
-    )
+#     centered_on_line = (  # Determine if robot is centered on a line using ground sensors
+#             line_left and line_center and line_right
+#     )
     # Define a stronger base speed for line following (half of max)
     base_speed = MAX_SPEED * 0.3
 
-    # If forced to follow or robot is centered, reset to forward state
-    if force_follow or centered_on_line:
-        line_following_state = 'forward'  # Set state to drive straight
-        line_counter = 0  # Reset counter for turning durations
+#     # If forced to follow or robot is centered, reset to forward state
+#     if force_follow or centered_on_line:
+#         line_following_state = 'forward'  # Set state to drive straight
+#         line_counter = 0  # Reset counter for turning durations
 
     # --- State machine logic ---
     # --- State machine logic ---
@@ -461,7 +461,7 @@ def line_following_control(normalized_values, force_follow=False):
         rightSpeed = 1.5 * base_speed
         if line_counter >= 80:  # After a few iterations, return to forward
             phi_err = 0
-            phi = -math.pi
+            phi = 0
             line_following_state = 'forward'
 
     elif line_following_state == 'turn_right':  # If in turn right state
@@ -489,7 +489,7 @@ def line_following_control(normalized_values, force_follow=False):
         rightSpeed = 0
     # print(line_following_state)
     print(line_counter)
-    print(turn_180)
+    #print(turn_180)
     line_counter += 1  # Increment counter each call
     return leftSpeed, rightSpeed, phi_err, phi, reset, x  # Return computed motor speeds
 
@@ -680,5 +680,6 @@ except KeyboardInterrupt:
     print(f"Motor 1 total ticks: {ticks1}")
     print(f"Motor 2 total ticks: {ticks2}")
     print("Test completed")
+
 
 
