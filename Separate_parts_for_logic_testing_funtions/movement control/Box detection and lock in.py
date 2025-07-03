@@ -85,4 +85,22 @@ while True:
         time.sleep(0.5)  # Debounce delay
 
     time.sleep(0.1)
+
+# WHILE LOOP INTTERUPT
+while True:
+    # Could add stop motors and a
+    if button.value() == 1:  # Button pressed (assuming active-high)
+        current_time = time.time()
+        # Simple debounce - only register one press every 0.5 seconds
+        if current_time - detector.last_button_press > 0.5:
+            detector.set_goal_reached(True)
+            print("Button pressed: Goal set to True")
+            detector.last_button_press = current_time
+    
+# Needs to  Move backwards 
+
+
+    
+    
 '''''
+
